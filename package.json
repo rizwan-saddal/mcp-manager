@@ -1,0 +1,69 @@
+{
+  "name": "mcp-manager",
+  "displayName": "Docker MCP Manager",
+  "description": "Eliminate CLI fatigue. Visually manage, search, and deploy 300+ Docker MCP servers with a premium, searchable dashboard.",
+  "version": "1.0.0",
+  "publisher": "rizwan-saddal",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/rizwan-saddal/mcp-manager"
+  },
+  "icon": "assets/icon.png",
+  "engines": {
+    "vscode": "^1.74.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "mcp-manager.openDashboard",
+        "title": "MCP: Open Manager Dashboard"
+      }
+    ]
+  },
+  "extensionDependencies": [
+    "ms-azuretools.vscode-docker"
+  ],
+  "scripts": {
+    "vscode:prepublish": "npm run build",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src",
+    "test": "node ./out/test/runTest.js",
+    "dev": "vite",
+    "build": "vite build && tsc -p tsconfig.extension.json",
+    "package": "vsce package",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@tailwindcss/vite": "^4.1.18",
+    "clsx": "^2.1.1",
+    "framer-motion": "^12.26.2",
+    "js-yaml": "^4.1.0",
+    "lucide-react": "^0.562.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "tailwind-merge": "^3.4.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.1",
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^24.10.1",
+    "@types/react": "^19.2.5",
+    "@types/react-dom": "^19.2.3",
+    "@types/vscode": "^1.74.0",
+    "@vitejs/plugin-react": "^5.1.1",
+    "@vscode/vsce": "^3.7.1",
+    "autoprefixer": "^10.4.23",
+    "eslint": "^9.39.1",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^4.1.18",
+    "typescript": "~5.9.3",
+    "vite": "^7.2.4"
+  }
+}
