@@ -98,8 +98,11 @@ function activate(context) {
                         panel.webview.postMessage({ command: 'servers_list', data: servers });
                     }
                     catch (err) {
-                        vscode.window.showErrorMessage('Failed to list servers: ' + err.message);
-                        panel.webview.postMessage({ command: 'error', message: err.message });
+                        const errorMsg = err.message || String(err);
+                        console.error('Failed to list servers:', err);
+                        console.error('Error stack:', err.stack);
+                        vscode.window.showErrorMessage('Failed to list servers: ' + errorMsg);
+                        panel.webview.postMessage({ command: 'error', message: errorMsg });
                     }
                     return;
                 case 'add_server':
@@ -224,35 +227,56 @@ function activate(context) {
     context.subscriptions.push(disposable);
 }
 function listMcpServers() {
-    const HOME = process.env.USERPROFILE || process.env.HOME || "";
-    const CATALOG_PATH = path.join(HOME, ".docker", "mcp", "catalogs", "docker-mcp.yaml");
-    if (!fs.existsSync(CATALOG_PATH)) {
-        throw new Error('Catalog not found at ' + CATALOG_PATH);
-    }
-    const fileContents = fs.readFileSync(CATALOG_PATH, "utf8");
-    const data = yaml.load(fileContents);
-    if (!data?.registry) {
-        throw new Error("Invalid catalog format");
-    }
-    // Get enabled servers from registry.yaml
-    const REGISTRY_PATH = path.join(HOME, ".docker", "mcp", "registry.yaml");
-    let enabledServers = [];
-    if (fs.existsSync(REGISTRY_PATH)) {
-        const registryContent = fs.readFileSync(REGISTRY_PATH, "utf8");
-        const registryData = yaml.load(registryContent);
-        if (registryData?.registry) {
-            enabledServers = Object.keys(registryData.registry);
+    try {
+        const HOME = process.env.USERPROFILE || process.env.HOME || "";
+        console.log('HOME directory:', HOME);
+        const CATALOG_PATH = path.join(HOME, ".docker", "mcp", "catalogs", "docker-mcp.yaml");
+        console.log('Catalog path:', CATALOG_PATH);
+        if (!fs.existsSync(CATALOG_PATH)) {
+            throw new Error('Catalog not found at ' + CATALOG_PATH);
         }
+        console.log('Reading catalog file...');
+        const fileContents = fs.readFileSync(CATALOG_PATH, "utf8");
+        console.log('Catalog file size:', fileContents.length, 'bytes');
+        console.log('Parsing YAML...');
+        const data = yaml.load(fileContents);
+        if (!data?.registry) {
+            throw new Error("Invalid catalog format: missing registry field");
+        }
+        console.log('Registry entries:', Object.keys(data.registry).length);
+        // Get enabled servers from registry.yaml
+        const REGISTRY_PATH = path.join(HOME, ".docker", "mcp", "registry.yaml");
+        console.log('Registry path:', REGISTRY_PATH);
+        let enabledServers = [];
+        if (fs.existsSync(REGISTRY_PATH)) {
+            console.log('Reading registry file...');
+            const registryContent = fs.readFileSync(REGISTRY_PATH, "utf8");
+            const registryData = yaml.load(registryContent);
+            if (registryData?.registry) {
+                enabledServers = Object.keys(registryData.registry);
+                console.log('Enabled servers:', enabledServers.length);
+            }
+        }
+        else {
+            console.log('Registry file not found, no servers enabled');
+        }
+        const servers = Object.entries(data.registry).map(([id, info]) => ({
+            id,
+            title: info.title || id,
+            description: info.description || "No description",
+            image: info.image,
+            iconUrl: info.icon,
+            category: info.metadata?.category || "uncategorized",
+            enabled: enabledServers.includes(id)
+        }));
+        console.log('Returning', servers.length, 'servers');
+        return servers;
     }
-    return Object.entries(data.registry).map(([id, info]) => ({
-        id,
-        title: info.title || id,
-        description: info.description || "No description",
-        image: info.image,
-        iconUrl: info.icon,
-        category: info.metadata?.category || "uncategorized",
-        enabled: enabledServers.includes(id)
-    }));
+    catch (error) {
+        console.error('Error in listMcpServers:', error);
+        console.error('Error stack:', error.stack);
+        throw error;
+    }
 }
 function getWebviewContent(webview, extensionUri) {
     const manifestPath = path.join(extensionUri.fsPath, 'dist', '.vite', 'manifest.json');
