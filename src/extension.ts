@@ -24,19 +24,15 @@ export async function activate(context: vscode.ExtensionContext) {
     try {
         // @ts-ignore - Assuming the API exists or is injected by the environment/mock
         vscode.lm.registerMcpServerDefinitionProvider('mcp-manager-provider', {
-            name: 'MCP Manager Router',
-            getMcpServerDefinitions: () => {
-                return [{
-                    id: 'mcp-manager-router',
-                    name: 'MCP Manager Tools',
-                    command: {
-                        command: uvPath,
-                        args: ['run', routerPath],
-                        env: {
-                            'PYTHONUNBUFFERED': '1'
-                        }
-                    }
-                }];
+            provideMcpServerDefinitions: () => {
+                return [
+                    new vscode.McpStdioServerDefinition(
+                        'MCP Manager Tools',
+                        uvPath,
+                        ['run', routerPath],
+                        { 'PYTHONUNBUFFERED': '1' }
+                    )
+                ];
             }
         });
         console.log('Registered MCP Server Definition Provider.');

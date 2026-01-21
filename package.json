@@ -3,6 +3,10 @@
   "displayName": "MCP Manager",
   "description": "Lazy Loading Router for MCP tools using uv",
   "version": "0.0.1",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/rizwan-saddal/mcp-manager"
+  },
   "engines": {
     "vscode": "^1.90.0"
   },
@@ -33,7 +37,7 @@
     }
   },
   "scripts": {
-    "vscode:prepublish": "npm run package",
+    "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "package": "vsce package",
