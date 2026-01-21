@@ -44,7 +44,7 @@ declare global {
   }
 }
 
-const CATEGORIES = ['All', 'Search', 'DevOps', 'Database', 'Productivity', 'AI'];
+const CATEGORIES = ['All', 'Search', 'DevOps', 'Database', 'Productivity', 'AI', 'Cloud', 'Utilities'];
 
 export default function App() {
   const [servers, setServers] = useState<McpServer[]>([]);

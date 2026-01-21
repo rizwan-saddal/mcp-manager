@@ -10,6 +10,7 @@ It replaces the need for complex CLI commands with a high-end, "Cyber-Dark" dash
 - **Visual Catalog**: Browse all available MCP servers (Brave, Fetch, PostgreSQL, etc.) in a searchable grid.
 - **One-Click Management**: Enable or disable servers instantly. The extension communicates directly with your Docker backend.
 - **Live Status**: Real-time indicators showing which servers are "Running" vs "Idle".
+- **Dynamic Community Hub**: Fetches and parses hundreds of servers directly from the official MCP registry in real-time.
 - **Global Reach**: Works across any workspace by connecting to your global Docker registry.
 
 ## 🛠️ Installation

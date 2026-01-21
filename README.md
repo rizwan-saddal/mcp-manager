@@ -24,6 +24,13 @@ Browse the entire Docker MCP catalog in a searchable, categorized grid. Instantl
 * **Enable/Disable**: Instantly provision or free up resources.
 * **Auto-Sync**: The dashboard updates in real-time. If you change something via CLI, the UI reflects it immediately.
 
+### 🌐 Dynamic Community Hub
+
+Access the entire Model Context Protocol ecosystem from a single interface.
+
+> [!TIP]
+> **Live Ecosystem Sync**: The Community Hub now dynamically fetches and parses hundreds of servers directly from the [Official MCP Server Registry](https://github.com/modelcontextprotocol/servers). Stay up-to-date with the latest Reference, Official, and Community-built servers as they are released.
+
 ### 🔍 Global Swarm Integration
 
 This extension interfaces directly with your global Docker registry (`~/.docker/mcp/registry.yaml`), meaning your managed servers are available to **any agent workspace** on your machine.
@@ -50,7 +57,7 @@ Built with a premium Cyber-Dark aesthetic:
 
 ## 🤝 Contributing
 
-* **Repo**: [Local Workspace]
+* **Repo**: [https://github.com/rizwan-saddal/mcp-manager](https://github.com/rizwan-saddal/mcp-manager)
 * **Publisher**: rizwan-saddal
 
 ---

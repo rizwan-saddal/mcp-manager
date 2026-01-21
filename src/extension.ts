@@ -3,6 +3,17 @@ import * as path from 'node:path';
 import * as fs from 'node:fs';
 import * as cp from 'node:child_process';
 import * as yaml from 'js-yaml';
+import * as https from 'node:https';
+
+interface ParsedServer {
+    id: string;
+    title: string;
+    description: string;
+    repo: string;
+    subpath?: string;
+    category: string;
+    iconUrl?: string;
+}
 
 export function activate(context: vscode.ExtensionContext) {
     console.log('MCP Manager extension is active');
@@ -121,51 +132,15 @@ export function activate(context: vscode.ExtensionContext) {
                         });
                         return;
                     case 'fetch_community_servers':
-                        // In a real scenario, we might fetch a JSON from a repo. 
-                        // For now, we return a hardcoded list of popular community servers.
-                        const communityServers = [
-                            { 
-                                id: 'fetch', 
-                                title: 'Fetch', 
-                                description: 'A server to fetch web content for LLMs. Optimized for scraping and readability.', 
-                                repo: 'https://github.com/modelcontextprotocol/servers',
-                                subpath: 'src/fetch',
-                                category: 'Search' 
-                            },
-                            { 
-                                id: 'filesystem', 
-                                title: 'Filesystem', 
-                                description: 'Securely access and modify local files.', 
-                                repo: 'https://github.com/modelcontextprotocol/servers',
-                                subpath: 'src/filesystem',
-                                category: 'Productivity' 
-                            },
-                            { 
-                                id: 'postgres', 
-                                title: 'PostgreSQL', 
-                                description: 'Interact with PostgreSQL databases.', 
-                                repo: 'https://github.com/modelcontextprotocol/servers',
-                                subpath: 'src/postgres',
-                                category: 'Database' 
-                            },
-                             { 
-                                id: 'git', 
-                                title: 'Git', 
-                                description: 'Tools to read, search, and push to Git repositories.', 
-                                repo: 'https://github.com/modelcontextprotocol/servers',
-                                subpath: 'src/git',
-                                category: 'DevOps' 
-                            },
-                            { 
-                                id: 'memory', 
-                                title: 'Memory', 
-                                description: 'Persistent memory for your agentic workflows.', 
-                                repo: 'https://github.com/modelcontextprotocol/servers',
-                                subpath: 'src/memory',
-                                category: 'AI' 
-                            }
-                        ];
-                        panel.webview.postMessage({ command: 'community_servers_list', data: communityServers });
+                        try {
+                            console.log('Fetching community servers from GitHub...');
+                            const communityServers = await fetchAndParseCommunityServers();
+                            console.log(`Parsed ${communityServers.length} community servers`);
+                            panel.webview.postMessage({ command: 'community_servers_list', data: communityServers });
+                        } catch (err: any) {
+                            console.error('Failed to fetch community servers:', err);
+                            panel.webview.postMessage({ command: 'operation_error', message: `Failed to fetch community servers: ${err.message}` });
+                        }
                         return;
 
                     case 'clone_server':
@@ -324,6 +299,71 @@ function getWebviewContent(webview: vscode.Webview, extensionUri: vscode.Uri) {
     <script type="module" nonce="${nonce}" src="${scriptUri}"></script>
 </body>
 </html>`;
+}
+
+async function fetchAndParseCommunityServers(): Promise<ParsedServer[]> {
+    const README_URL = 'https://raw.githubusercontent.com/modelcontextprotocol/servers/main/README.md';
+    
+    return new Promise((resolve, reject) => {
+        https.get(README_URL, (res) => {
+            let data = '';
+            res.on('data', (chunk) => { data += chunk; });
+            res.on('end', () => {
+                try {
+                    const servers: ParsedServer[] = [];
+                    const lines = data.split('\n');
+                    let currentCategory = 'Other';
+
+                    for (const line of lines) {
+                        const headerMatch = line.match(/^#{2,4}\s+(.+)$/);
+                        if (headerMatch) {
+                            const header = headerMatch[1].trim();
+                            if (header.includes('Reference')) currentCategory = 'AI';
+                            else if (header.includes('Official')) currentCategory = 'Cloud';
+                            else if (header.includes('Community')) currentCategory = 'DevOps';
+                            else if (header.includes('Search')) currentCategory = 'Search';
+                            else if (header.includes('Database')) currentCategory = 'Database';
+                            else if (header.includes('Developer')) currentCategory = 'DevOps';
+                            else if (header.includes('Knowledge') || header.includes('Productivity')) currentCategory = 'Productivity';
+                            else if (header.includes('Cloud')) currentCategory = 'Cloud';
+                            else if (header.includes('Utilities')) currentCategory = 'Utilities';
+                            continue;
+                        }
+
+                        // Match patterns like:
+                        // - **[Title](URL)** - Description
+                        // - <img ... src="ICON" ... /> **[Title](URL)** - Description
+                        const serverMatch = line.match(/^-\s+(?:<img[^>]+src="([^"]+)"[^>]*>\s+)?\*\*\[([^\]]+)\]\(([^)]+)\)\*\*\s+[-—]\s+(.+)$/);
+                        
+                        if (serverMatch) {
+                            const [_, iconUrl, title, link, description] = serverMatch;
+                            
+                            let repo = link;
+                            let subpath: string | undefined = undefined;
+
+                            if (!link.startsWith('http')) {
+                                repo = 'https://github.com/modelcontextprotocol/servers';
+                                subpath = link;
+                            }
+
+                            servers.push({
+                                id: title.toLowerCase().replace(/\s+/g, '-'),
+                                title,
+                                description: description.trim(),
+                                repo,
+                                subpath,
+                                category: currentCategory,
+                                iconUrl
+                            });
+                        }
+                    }
+                    resolve(servers);
+                } catch (e) {
+                    reject(e);
+                }
+            });
+        }).on('error', reject);
+    });
 }
 
 function getNonce() {

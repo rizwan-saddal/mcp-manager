@@ -2625,6 +2625,7 @@ var safeLoadAll = renamed("safeLoadAll", "loadAll");
 var safeDump = renamed("safeDump", "dump");
 
 // src/extension.ts
+var https = __toESM(require("node:https"));
 function activate(context) {
   console.log("MCP Manager extension is active");
   let currentPanel = void 0;
@@ -2730,49 +2731,15 @@ function activate(context) {
             });
             return;
           case "fetch_community_servers":
-            const communityServers = [
-              {
-                id: "fetch",
-                title: "Fetch",
-                description: "A server to fetch web content for LLMs. Optimized for scraping and readability.",
-                repo: "https://github.com/modelcontextprotocol/servers",
-                subpath: "src/fetch",
-                category: "Search"
-              },
-              {
-                id: "filesystem",
-                title: "Filesystem",
-                description: "Securely access and modify local files.",
-                repo: "https://github.com/modelcontextprotocol/servers",
-                subpath: "src/filesystem",
-                category: "Productivity"
-              },
-              {
-                id: "postgres",
-                title: "PostgreSQL",
-                description: "Interact with PostgreSQL databases.",
-                repo: "https://github.com/modelcontextprotocol/servers",
-                subpath: "src/postgres",
-                category: "Database"
-              },
-              {
-                id: "git",
-                title: "Git",
-                description: "Tools to read, search, and push to Git repositories.",
-                repo: "https://github.com/modelcontextprotocol/servers",
-                subpath: "src/git",
-                category: "DevOps"
-              },
-              {
-                id: "memory",
-                title: "Memory",
-                description: "Persistent memory for your agentic workflows.",
-                repo: "https://github.com/modelcontextprotocol/servers",
-                subpath: "src/memory",
-                category: "AI"
-              }
-            ];
-            panel.webview.postMessage({ command: "community_servers_list", data: communityServers });
+            try {
+              console.log("Fetching community servers from GitHub...");
+              const communityServers = await fetchAndParseCommunityServers();
+              console.log(`Parsed ${communityServers.length} community servers`);
+              panel.webview.postMessage({ command: "community_servers_list", data: communityServers });
+            } catch (err) {
+              console.error("Failed to fetch community servers:", err);
+              panel.webview.postMessage({ command: "operation_error", message: `Failed to fetch community servers: ${err.message}` });
+            }
             return;
           case "clone_server":
             const { repo, id } = message.server;
@@ -2898,6 +2865,62 @@ function getWebviewContent(webview, extensionUri) {
     <script type="module" nonce="${nonce}" src="${scriptUri}"></script>
 </body>
 </html>`;
+}
+async function fetchAndParseCommunityServers() {
+  const README_URL = "https://raw.githubusercontent.com/modelcontextprotocol/servers/main/README.md";
+  return new Promise((resolve, reject) => {
+    https.get(README_URL, (res) => {
+      let data = "";
+      res.on("data", (chunk) => {
+        data += chunk;
+      });
+      res.on("end", () => {
+        try {
+          const servers = [];
+          const lines = data.split("\n");
+          let currentCategory = "Other";
+          for (const line of lines) {
+            const headerMatch = line.match(/^#{2,4}\s+(.+)$/);
+            if (headerMatch) {
+              const header = headerMatch[1].trim();
+              if (header.includes("Reference")) currentCategory = "AI";
+              else if (header.includes("Official")) currentCategory = "Cloud";
+              else if (header.includes("Community")) currentCategory = "DevOps";
+              else if (header.includes("Search")) currentCategory = "Search";
+              else if (header.includes("Database")) currentCategory = "Database";
+              else if (header.includes("Developer")) currentCategory = "DevOps";
+              else if (header.includes("Knowledge") || header.includes("Productivity")) currentCategory = "Productivity";
+              else if (header.includes("Cloud")) currentCategory = "Cloud";
+              else if (header.includes("Utilities")) currentCategory = "Utilities";
+              continue;
+            }
+            const serverMatch = line.match(/^-\s+(?:<img[^>]+src="([^"]+)"[^>]*>\s+)?\*\*\[([^\]]+)\]\(([^)]+)\)\*\*\s+[-—]\s+(.+)$/);
+            if (serverMatch) {
+              const [_, iconUrl, title, link, description] = serverMatch;
+              let repo = link;
+              let subpath = void 0;
+              if (!link.startsWith("http")) {
+                repo = "https://github.com/modelcontextprotocol/servers";
+                subpath = link;
+              }
+              servers.push({
+                id: title.toLowerCase().replace(/\s+/g, "-"),
+                title,
+                description: description.trim(),
+                repo,
+                subpath,
+                category: currentCategory,
+                iconUrl
+              });
+            }
+          }
+          resolve(servers);
+        } catch (e) {
+          reject(e);
+        }
+      });
+    }).on("error", reject);
+  });
 }
 function getNonce() {
   let text = "";
