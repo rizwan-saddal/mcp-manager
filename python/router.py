@@ -11,6 +11,10 @@ import subprocess
 
 # Determine the absolute path to the repository root
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+LOGS_DIR = os.path.join(REPO_ROOT, "logs")
+if not os.path.exists(LOGS_DIR):
+    os.makedirs(LOGS_DIR, exist_ok=True)
+LOG_FILE = os.path.join(LOGS_DIR, "usage.jsonl")
 
 # Ensure mcp is installed or available
 try:
@@ -76,6 +80,11 @@ async def call_tool(name: str, arguments: dict) -> List[types.TextContent | type
         else:
              cmd_list.append(part)
 
+    import time
+    start_time = time.time()
+    success = False
+    error_msg = None
+    
     try:
         process = await asyncio.create_subprocess_exec(
             *cmd_list,
@@ -91,13 +100,33 @@ async def call_tool(name: str, arguments: dict) -> List[types.TextContent | type
 
         if process.returncode != 0:
              # Include stderr in the output for debugging
+             error_msg = error_text
+             success = False
              return [types.TextContent(type="text", text=f"Error executing tool {name}:\n{error_text}\nOutput:\n{output_text}")]
 
+        success = True
         # If strict output format is needed, we could parse JSON here. For now return raw stdout.
         return [types.TextContent(type="text", text=output_text if output_text else "Success (No Output)")]
 
     except Exception as e:
+        error_msg = str(e)
+        success = False
         return [types.TextContent(type="text", text=f"Exception running tool: {str(e)}")]
+    finally:
+        duration = time.time() - start_time
+        try:
+            log_entry = {
+                "timestamp": time.time(), # Unix timestamp
+                "iso_time": time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime()),
+                "tool": name,
+                "success": success,
+                "duration": duration,
+                "error": error_msg
+            }
+            with open(LOG_FILE, "a", encoding="utf-8") as f:
+                f.write(json.dumps(log_entry) + "\n")
+        except:
+            pass # Don't fail tool execution if logging fails
 
 async def main():
     # Run the server on stdio

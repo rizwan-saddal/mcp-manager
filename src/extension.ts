@@ -2,9 +2,47 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import { UvManager } from './uvManager';
 import { ConfigSync } from './configSync';
+import { DashboardGenerator } from './dashboard';
 
 export async function activate(context: vscode.ExtensionContext) {
     console.log('Activating MCP Manager Extension...');
+
+    // Register commands immediately so they are available even if bootstrap fails
+    // Command to manual sync
+    context.subscriptions.push(vscode.commands.registerCommand('mcp-manager.syncConfig', async () => {
+         // We need uvPath to sync, so we might need to check availability here or store it
+         // For now, let's try to get it again or use a placeholder if bootstrapping failed previously.
+         // Actually, if activate failed, we might not have reached here. 
+         // But if we move registration up, we need scopes.
+         // Let's defer execution.
+         try {
+             const verifiedUvPath = await UvManager.ensureUV(context);
+             const routerPath = context.asAbsolutePath(path.join('python', 'router.py'));
+             await ConfigSync.updateAntigravityConfig(verifiedUvPath, routerPath);
+             vscode.window.showInformationMessage('MCP Config Synced to Antigravity.');
+         } catch(e) {
+             vscode.window.showErrorMessage(`Sync failed: ${e}`);
+         }
+    }));
+
+    // Command to show status
+    context.subscriptions.push(vscode.commands.registerCommand('mcp-manager.showStatus', async () => {
+        const panel = vscode.window.createWebviewPanel(
+            'mcpDashboard',
+            'MCP Manager Dashboard',
+            vscode.ViewColumn.One,
+            { enableScripts: true }
+        );
+
+        const manifestPath = path.join(context.extensionPath, 'router_manifest.json');
+        const logPath = path.join(context.extensionPath, 'logs', 'usage.jsonl');
+        
+        try {
+            panel.webview.html = await DashboardGenerator.getHtml(context.extensionUri, logPath, manifestPath);
+        } catch (e) {
+            vscode.window.showErrorMessage(`Failed to load dashboard: ${e}`);
+        }
+    }));
 
     // 1. Ensure uv is available
     let uvPath = 'uv';
@@ -12,7 +50,7 @@ export async function activate(context: vscode.ExtensionContext) {
         uvPath = await UvManager.ensureUV(context);
     } catch (e) {
         vscode.window.showErrorMessage(`Failed to bootstrap 'uv': ${e}`);
-        return;
+        // Do NOT return, so that commands remain registered
     }
 
     // 2. Resolve Router Path
@@ -50,12 +88,6 @@ export async function activate(context: vscode.ExtensionContext) {
 
     // 5. Sync Config to Antigravity
     await ConfigSync.updateAntigravityConfig(uvPath, routerPath);
-    
-    // Command to manual sync
-    context.subscriptions.push(vscode.commands.registerCommand('mcp-manager.syncConfig', async () => {
-         await ConfigSync.updateAntigravityConfig(uvPath, routerPath);
-         vscode.window.showInformationMessage('MCP Config Synced to Antigravity.');
-    }));
 }
 
 export function deactivate() {}

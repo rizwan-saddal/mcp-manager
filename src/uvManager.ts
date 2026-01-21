@@ -5,17 +5,18 @@ import * as fs from 'fs';
 import * as cp from 'child_process';
 import * as util from 'util';
 
-const exec = util.promisify(cp.exec);
+const execFile = util.promisify(cp.execFile);
 
 export class UvManager {
     static async ensureUV(context: vscode.ExtensionContext): Promise<string> {
         // 1. Check if uv is in PATH
         try {
-            await exec('uv --version');
+            await execFile('uv', ['--version']);
             return 'uv';
         } catch (e) {
             // Not in path
         }
+
 
         // 2. Check globalStorage
         const storagePath = context.globalStorageUri.fsPath;
@@ -57,8 +58,18 @@ export class UvManager {
         // Use curl or powershell to download and extract
         if (platform === 'win32') {
             const zipPath = path.join(destDir, 'uv.zip');
-            const cmd = `powershell -Command "& { Invoke-WebRequest -Uri '${url}' -OutFile '${zipPath}'; Expand-Archive -Path '${zipPath}' -DestinationPath '${destDir}' -Force; }"`;
-            await exec(cmd);
+            // Use execFile to avoid spawning cmd.exe
+            // Determine available shell (pwsh or powershell)
+            let shell = 'powershell';
+            try {
+                await execFile('pwsh', ['-version']);
+                shell = 'pwsh';
+            } catch (e) {
+                // pwsh not found, fallback to powershell
+            }
+
+            const script = `& { Invoke-WebRequest -Uri '${url}' -OutFile '${zipPath}'; Expand-Archive -Path '${zipPath}' -DestinationPath '${destDir}' -Force; }`;
+            await execFile(shell, ['-NoProfile', '-Command', script]);
             // Move from extraction subfolder usually? 
             // The zip usually contains uv.exe directly or in a folder.
             // Let's assume we need to find it.
@@ -70,8 +81,15 @@ export class UvManager {
             // Pass for now.
         } else {
             // Unix (tar.gz)
-            const cmd = `curl -L ${url} | tar -xz -C "${destDir}"`;
-            await exec(cmd);
+            // We cannot pipe with execFile directly. We should use curl locally to a file then tar.
+            // Or simpler: just use curl to download to file, then tar to extract.
+            const tarPath = path.join(destDir, 'uv.tar.gz');
+            
+            // 1. Download with curl
+            await execFile('curl', ['-L', url, '-o', tarPath]);
+            
+            // 2. Extract with tar
+            await execFile('tar', ['-xzf', tarPath, '-C', destDir]);
         }
         
         // Find the binary in subfolders and move to root of globalStorage if needed

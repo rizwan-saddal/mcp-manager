@@ -1,59 +1,210 @@
-# Docker MCP Manager for VS Code
+# MCP Gateway (Lazy Router)
 
 ![MCP Manager Icon](https://github.com/rizwan-saddal/mcp-manager/raw/main/assets/icon.png)
 
-**Stop fighting the CLI. Surgically deploy and manage Model Context Protocol (MCP) servers across your agent swarm.**
+**The "Lazy Loading Router" for MCP tools.**
 
-Managing hundreds of MCP servers via the command line is inefficient, error-prone, and visually opaque. The **Docker MCP Manager** solves this by replacing `docker mcp` commands with a high-fidelity, interactive dashboard.
+This extension has been refactored from a UI-based dashboard into a high-performance, background service that orchestrates Model Context Protocol (MCP) servers for VS Code and Antigravity.
 
-## 🛡️ Why Use This?
+## 🚀 How It Works
 
-* **Eliminate CLI Fatigue**: Forget `docker mcp server enable <long-id>`. Manage everything with simple clicks.
-* **Discover Capabilities**: Browsing 300+ servers in a terminal is impossible. Our **Visual Catalog** lets you search, filter by category (AI, Database, DevOps), and read descriptions instantly.
-* **Real-Time Visibility**: Stop guessing what's running. See live status indicators for every server in your registry.
-* **Scale**: Designed to handle large catalogs with smart pagination and instant search.
+Instead of running all your MCP servers simultaneously (wasting RAM/CPU), **MCP Manager** acts as a router:
 
-## 🚀 Features
+1. **Orchestration**: It uses `uv` (a super-fast Python package manager) to manage server environments.
+2. **Lazy Loading**: Tools are only spun up when an AI agent explicitly requests them.
+3. **Bridge**: It bridges your existing configuration into the VS Code Language Model API.
 
-### 🌌 Cyber-Dark Visual Catalog
+## ⚡ Features
 
-Browse the entire Docker MCP catalog in a searchable, categorized grid. Instantly find and understand tools like **Brave Search**, **PostgreSQL**, **GitHub**, and **Fetch**.
+* **Auto-Bootstrap**: Automatically installs and manages `uv`.
+* **Zero-Config Migration**: Migrates your existing `mcp-config.json` to a `router_manifest.json`.
+* **Antigravity Sync**: keeps your MCP configuration synchronized with the Antigravity agent.
 
-### ⚡ One-Click Control
+## 📦 Usage
 
-* **Enable/Disable**: Instantly provision or free up resources.
-* **Auto-Sync**: The dashboard updates in real-time. If you change something via CLI, the UI reflects it immediately.
+The extension works automatically in the background.
 
-### 🌐 Dynamic Community Hub
+1. **Install**: Sideload the `.vsix`.
+2. **Sync**: The extension activates on startup (`onStartupFinished`).
+3. **Verify**: Run the command **`MCP: Show Status`** to see the list of active tools and the router status.
 
-Access the entire Model Context Protocol ecosystem from a single interface.
+## 🔧 Configuration
 
-> [!TIP]
-> **Live Ecosystem Sync**: The Community Hub now dynamically fetches and parses hundreds of servers directly from the [Official MCP Server Registry](https://github.com/modelcontextprotocol/servers). Stay up-to-date with the latest Reference, Official, and Community-built servers as they are released.
+The extension manages its own `router_manifest.json`.
 
-### 🔍 Global Swarm Integration
+* **Commands**:
+  * `MCP: Sync Configuration`: Force a sync of the router manifest.
+  * `MCP: Show Status`: detailed status notification.
 
-This extension interfaces directly with your global Docker registry (`~/.docker/mcp/registry.yaml`), meaning your managed servers are available to **any agent workspace** on your machine.
+## 🤖 Usage with Agents (VS Code & Antigravity)
 
-## 🔧 Requirements
+Once installed, **MCP Gateway** exposes your tools to any AI agent that supports the Model Context Protocol.
 
-* **VS Code**: v1.74.0 or higher.
-* **Docker Desktop**: Must be installed and running.
-* **MCP Support**: Ensure Docker MCP (Model Context Protocol) is enabled in your Docker settings.
+### 1. VS Code Copilot / Chat
 
-## 📦 Quick Start
+MCP Gateway automatically registers itself as a tool provider.
 
-1. Open the Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`).
-2. Type **`MCP: Open Manager Dashboard`**.
-3. The dashboard will launch in a new tab.
+* Open Github Copilot Chat.
+* Ask: *"Please fetch the latest stock price using the fetch tool"* (if configured).
+* The gateway will spin up the necessary server, run the tool, and shut it down.
 
-## 🎨 Theme
+### 2. Google Antigravity
 
-Built with a premium Cyber-Dark aesthetic:
+The extension automatically syncs your active configuration to Antigravity's workspace.
 
-* **Cyber-Dark Mode**: Optimized for late-night coding sessions.
-* **Glassmorphism**: Translucent panels and cards.
-* **Neon Accents**: Cyan and Purple highlights for active states.
+* Just ask Antigravity: *"Use the `sqlite` tool to query the database."*
+* It works out of the box.
+
+### 3. Adding New Servers
+
+To add a new server, edit the `router_manifest.json` in your extension folder (or use the migration script for existing `mcp-config.json` files).
+
+**Example `router_manifest.json`:**
+
+```json
+{
+  "tools": [
+    {
+      "name": "fetch",
+      "description": "Fetches a URL and returns content",
+      "command": ["uv", "run", "mcp-server-fetch"],
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "url": { "type": "string" }
+        }
+      }
+    },
+    {
+      "name": "sqlite_query",
+      "description": "Run a read-only SQL query",
+      "command": ["uv", "run", "mcp-server-sqlite", "--db-path", "./data.db"],
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+           "query": { "type": "string" }
+        }
+      }
+    }
+  ]
+}
+```
+
+## 📚 Community Server Catalog
+
+Explore the power of the MCP ecosystem. Configure these in your `router_manifest.json` to extend your agent's capabilities immediately.
+
+<details>
+<summary><b>📂 Filesystem & Data</b></summary>
+
+### **SQLite**
+
+*Query local databases efficiently.*
+
+```json
+{
+  "name": "sqlite_query",
+  "command": ["uv", "run", "mcp-server-sqlite", "--db-path", "./my-database.db"]
+}
+```
+
+### **PostgreSQL**
+
+*Direct access to Postgres databases.*
+
+```json
+{
+  "name": "postgres_query",
+  "command": ["uv", "run", "mcp-server-postgres", "postgresql://user:password@localhost/db"]
+}
+```
+
+</details>
+
+<details>
+<summary><b>🌐 Web & Search</b></summary>
+
+### **Brave Search**
+
+*Perform privacy-focused web searches.*
+
+```json
+{
+  "name": "brave_search",
+  "command": ["uv", "run", "mcp-server-brave-search"],
+  "env": { "BRAVE_API_KEY": "YOUR_KEY_HERE" }
+}
+```
+
+### **Fetch**
+
+*Retrieve raw content from any URL.*
+
+```json
+{
+  "name": "fetch",
+  "command": ["uv", "run", "mcp-server-fetch"]
+}
+```
+
+</details>
+
+<details>
+<summary><b>🛠️ DevOps & Git</b></summary>
+
+### **Git**
+
+*Read and search git repositories.*
+
+```json
+{
+  "name": "git_read",
+  "command": ["uv", "run", "mcp-server-git", "--repository", "/path/to/repo"]
+}
+```
+
+### **GitHub**
+
+*Interact with GitHub Issues and PRs.*
+
+```json
+{
+  "name": "github_pr",
+  "command": ["uv", "run", "mcp-server-github"],
+  "env": { "GITHUB_TOKEN": "YOUR_TOKEN_HERE" }
+}
+```
+
+</details>
+
+<details>
+<summary><b>🧠 Cloud & AI</b></summary>
+
+### **Google Maps**
+
+*Search for places and get location details.*
+
+```json
+{
+  "name": "maps_search",
+  "command": ["uv", "run", "mcp-server-google-maps"],
+  "env": { "GOOGLE_MAPS_API_KEY": "YOUR_KEY_HERE" }
+}
+```
+
+### **Sentry**
+
+*Analyze error logs and issues.*
+
+```json
+{
+  "name": "sentry_issues",
+  "command": ["uv", "run", "mcp-server-sentry"],
+  "env": { "SENTRY_AUTH_TOKEN": "YOUR_TOKEN_HERE" }
+}
+```
+
+</details>
 
 ## 🤝 Contributing
 
@@ -61,4 +212,4 @@ Built with a premium Cyber-Dark aesthetic:
 * **Publisher**: rizwan-saddal
 
 ---
-Powered by Docker & Model Context Protocol
+Powered by `uv` and Model Context Protocol

@@ -1,8 +1,9 @@
 {
-  "name": "mcp-manager",
-  "displayName": "MCP Manager",
+  "name": "mcp-gateway",
+  "displayName": "MCP Gateway",
   "description": "Lazy Loading Router for MCP tools using uv",
-  "version": "0.0.1",
+  "version": "0.0.5",
+  "icon": "assets/icon.png",
   "repository": {
     "type": "git",
     "url": "https://github.com/rizwan-saddal/mcp-manager"
@@ -22,13 +23,17 @@
       {
         "command": "mcp-manager.syncConfig",
         "title": "MCP: Sync Configuration"
+      },
+      {
+        "command": "mcp-manager.showStatus",
+        "title": "MCP: Show Status"
       }
     ],
     "configuration": {
       "type": "object",
-      "title": "MCP Manager",
+      "title": "MCP Gateway",
       "properties": {
-        "mcp-manager.pythonPath": {
+        "mcp-gateway.pythonPath": {
           "type": "string",
           "default": "python",
           "description": "Path to the Python interpreter to use for uv."
