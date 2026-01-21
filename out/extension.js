@@ -2626,6 +2626,102 @@ var safeDump = renamed("safeDump", "dump");
 
 // src/extension.ts
 var https = __toESM(require("node:https"));
+
+// src/serverConfigs.ts
+var SERVER_CONFIGS = {
+  "brave-search": [
+    {
+      key: "BRAVE_API_KEY",
+      label: "Brave API Key",
+      type: "password",
+      required: true,
+      description: "Required to access the Brave Search API. You can get a free key from the Brave Search API dashboard.",
+      placeholder: "BSA...",
+      pattern: "^BSA.*$",
+      errorMessage: 'Brave API Key usually starts with "BSA"'
+    }
+  ],
+  "github": [
+    {
+      key: "GITHUB_PERSONAL_ACCESS_TOKEN",
+      label: "GitHub Personal Access Token",
+      type: "password",
+      required: true,
+      description: "A personal access token with repo permissions is required to access GitHub repositories.",
+      placeholder: "ghp_...",
+      pattern: "^(ghp|github_pat)_.*$",
+      errorMessage: "Must be a valid GitHub Personal Access Token"
+    }
+  ],
+  "postgres": [
+    {
+      key: "POSTGRES_URL",
+      label: "Database Connection URL",
+      type: "text",
+      required: true,
+      description: "The connection string for your PostgreSQL database.",
+      placeholder: "postgresql://user:password@localhost:5432/dbname",
+      pattern: "^postgresql://.*$",
+      errorMessage: "Must be a valid postgresql:// URL"
+    }
+  ],
+  "filesystem": [
+    {
+      key: "ALLOWED_PATHS",
+      label: "Allowed Directory Paths",
+      type: "path",
+      required: true,
+      description: "Absolute paths to directories the server is allowed to access, separated by commas.",
+      placeholder: "/path/to/project"
+    }
+  ],
+  "google-maps": [
+    {
+      key: "GOOGLE_MAPS_API_KEY",
+      label: "Google Maps API Key",
+      type: "password",
+      required: true,
+      description: "API Key from Google Cloud Console with Maps API enabled.",
+      placeholder: "AIza...",
+      pattern: "^AIza[0-9A-Za-z-_]{35}$",
+      errorMessage: "Invalid Google API Key format"
+    }
+  ],
+  "slack": [
+    {
+      key: "SLACK_BOT_TOKEN",
+      label: "Slack Bot Token",
+      type: "password",
+      required: true,
+      description: "Bot User OAuth Token.",
+      placeholder: "xoxb-...",
+      pattern: "^xoxb-.*$",
+      errorMessage: "Must be a valid Slack Bot Token (starts with xoxb-)"
+    },
+    {
+      key: "SLACK_TEAM_ID",
+      label: "Slack Team ID",
+      type: "text",
+      required: true,
+      description: "The Workspace ID.",
+      placeholder: "T...",
+      pattern: "^T[A-Z0-9]+$",
+      errorMessage: "Invalid Slack Team ID"
+    }
+  ],
+  "sentry": [
+    {
+      key: "SENTRY_AUTH_TOKEN",
+      label: "Sentry Auth Token",
+      type: "password",
+      required: true,
+      description: "User Auth Token from Sentry settings.",
+      placeholder: "Start with sntry..."
+    }
+  ]
+};
+
+// src/extension.ts
 function activate(context) {
   console.log("MCP Manager extension is active");
   let currentPanel = void 0;
@@ -2682,27 +2778,31 @@ function activate(context) {
     );
     panel.webview.onDidReceiveMessage(
       async (message) => {
-        const runCmd = (command) => {
+        const runCmd = (command, cwd) => {
           return new Promise((resolve, reject) => {
-            const env = { ...process.env };
-            if (process.platform === "win32") {
-              const systemRoot = env.SystemRoot || "C:\\Windows";
-              const system32 = path.join(systemRoot, "System32");
-              const paths = (env.Path || "").split(path.delimiter);
-              if (!paths.some((p) => p.toLowerCase() === system32.toLowerCase())) {
-                paths.unshift(system32);
-                env.Path = paths.join(path.delimiter);
-              }
-              if (!env.ComSpec) {
-                env.ComSpec = path.join(system32, "cmd.exe");
-              }
-            }
-            cp.exec(command, { env }, (err, stdout, stderr) => {
-              if (err) {
-                reject({ err, stdout, stderr });
-              } else {
+            console.log(`Executing: ${command} in ${cwd || "default cwd"}`);
+            const child = cp.spawn(command, {
+              shell: true,
+              cwd,
+              env: process.env
+            });
+            let stdout = "";
+            let stderr = "";
+            child.stdout.on("data", (data) => {
+              stdout += data.toString();
+            });
+            child.stderr.on("data", (data) => {
+              stderr += data.toString();
+            });
+            child.on("close", (code) => {
+              if (code === 0) {
                 resolve({ stdout, stderr });
+              } else {
+                reject({ err: new Error(`Command failed with code ${code}`), stdout, stderr });
               }
+            });
+            child.on("error", (err) => {
+              reject({ err, stdout, stderr });
             });
           });
         };
@@ -2732,9 +2832,15 @@ function activate(context) {
                 config = JSON.parse(fs.readFileSync(configPath, "utf8"));
               }
               if (!config.mcpServers) config.mcpServers = {};
+              const envArgs = [];
+              if (message.env) {
+                for (const [key, value] of Object.entries(message.env)) {
+                  envArgs.push("-e", `${key}=${value}`);
+                }
+              }
               config.mcpServers[message.serverId] = {
                 command: "docker",
-                args: ["run", "-i", "--rm", server.image]
+                args: ["run", "-i", "--rm", ...envArgs, server.image]
               };
               fs.mkdirSync(path.dirname(configPath), { recursive: true });
               fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
@@ -2786,32 +2892,115 @@ function activate(context) {
               panel.webview.postMessage({ command: "operation_error", message: `Failed to fetch community servers: ${err.message}` });
             }
             return;
-          case "clone_server":
+          case "install_community_server":
             const { repo, id } = message.server;
             const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
             if (!workspaceFolder) {
               vscode.window.showErrorMessage("No workspace folder open. Please open a folder to clone the server.");
               return;
             }
-            const targetDir = path.join(workspaceFolder, "mcp-servers", id);
-            if (fs.existsSync(targetDir)) {
-              vscode.window.showInformationMessage(`Server already exists at ${targetDir}`);
-              panel.webview.postMessage({ command: "server_cloned", serverId: id });
-              return;
-            }
-            vscode.window.showInformationMessage(`Cloning ${id} server...`);
+            vscode.window.showInformationMessage(`Installing ${id}...`);
             const mcpDir = path.join(workspaceFolder, "mcp-servers");
+            const serverDir = path.join(mcpDir, id);
             if (!fs.existsSync(mcpDir)) {
               fs.mkdirSync(mcpDir);
             }
             try {
-              await runCmd(`git clone ${repo} ${path.join(mcpDir, id)}`);
-              vscode.window.showInformationMessage(`Successfully cloned ${id}`);
-              panel.webview.postMessage({ command: "server_cloned", serverId: id });
+              if (!fs.existsSync(serverDir)) {
+                await runCmd(`git clone ${repo} ${id}`, mcpDir);
+              } else {
+                console.log("Directory exists, skipping clone");
+              }
+              let config = { mcpServers: {} };
+              const configPath = getMcpConfigPath();
+              if (fs.existsSync(configPath)) {
+                config = JSON.parse(fs.readFileSync(configPath, "utf8"));
+              }
+              if (!config.mcpServers) config.mcpServers = {};
+              if (fs.existsSync(path.join(serverDir, "Dockerfile"))) {
+                vscode.window.showInformationMessage(`Building Docker image for ${id}...`);
+                panel.webview.postMessage({ command: "operation_start", message: `Building Docker image...` });
+                const imageName = `mcp-community-${id.toLowerCase()}`;
+                await runCmd(`docker build -t ${imageName} .`, serverDir);
+                config.mcpServers[id] = {
+                  command: "docker",
+                  args: ["run", "-i", "--rm", imageName]
+                };
+                fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+                vscode.window.showInformationMessage(`Successfully installed - running via Docker!`);
+                panel.webview.postMessage({ command: "server_added", serverId: id });
+              } else if (fs.existsSync(path.join(serverDir, "package.json"))) {
+                vscode.window.showInformationMessage(`Building Node.js server ${id}...`);
+                panel.webview.postMessage({ command: "operation_start", message: `Installing NPM dependencies...` });
+                await runCmd("npm install", serverDir);
+                await runCmd("npm run build", serverDir);
+                let buildPath = path.join(serverDir, "build", "index.js");
+                if (!fs.existsSync(buildPath)) {
+                  buildPath = path.join(serverDir, "dist", "index.js");
+                }
+                if (!fs.existsSync(buildPath)) {
+                  if (fs.existsSync(path.join(serverDir, "index.js"))) {
+                    buildPath = path.join(serverDir, "index.js");
+                  }
+                }
+                if (fs.existsSync(buildPath)) {
+                  config.mcpServers[id] = {
+                    command: "node",
+                    args: [buildPath]
+                  };
+                  fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+                  vscode.window.showInformationMessage(`Successfully installed Node.js server!`);
+                  panel.webview.postMessage({ command: "server_added", serverId: id });
+                } else {
+                  vscode.window.showWarningMessage(`Built ${id}, but couldn't locate entry point. Check configuration.`);
+                  panel.webview.postMessage({ command: "server_cloned", serverId: id });
+                }
+              } else if (fs.existsSync(path.join(serverDir, "pyproject.toml")) || fs.existsSync(path.join(serverDir, "requirements.txt"))) {
+                vscode.window.showInformationMessage(`Setting up Python environment for ${id}...`);
+                panel.webview.postMessage({ command: "operation_start", message: `Creating venv & installing pip packages...` });
+                await runCmd("python -m venv .venv", serverDir);
+                const isWin = process.platform === "win32";
+                const venvBin = path.join(serverDir, ".venv", isWin ? "Scripts" : "bin");
+                const pythonPath = path.join(venvBin, isWin ? "python.exe" : "python");
+                const pipPath = path.join(venvBin, isWin ? "pip.exe" : "pip");
+                await runCmd(`"${pythonPath}" -m pip install .`, serverDir);
+                let scriptName = id;
+                const pyprojectPath = path.join(serverDir, "pyproject.toml");
+                if (fs.existsSync(pyprojectPath)) {
+                  try {
+                    const content = fs.readFileSync(pyprojectPath, "utf8");
+                    const match = content.match(/\[project\.scripts\][^[]*?([\w-]+)\s*=/s);
+                    if (match) {
+                      scriptName = match[1];
+                    }
+                  } catch (e) {
+                    console.log("Error parsing pyproject.toml", e);
+                  }
+                }
+                const scriptPath = path.join(venvBin, isWin ? `${scriptName}.exe` : scriptName);
+                if (fs.existsSync(scriptPath)) {
+                  config.mcpServers[id] = {
+                    command: scriptPath,
+                    args: []
+                  };
+                } else {
+                  config.mcpServers[id] = {
+                    command: pythonPath,
+                    args: ["-m", scriptName]
+                  };
+                }
+                fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+                vscode.window.showInformationMessage(`Successfully installed Python server!`);
+                panel.webview.postMessage({ command: "server_added", serverId: id });
+              } else {
+                vscode.window.showInformationMessage(`Cloned ${id} to ${serverDir}. Please configure manually.`);
+                panel.webview.postMessage({ command: "server_cloned", serverId: id });
+              }
             } catch (e) {
-              const msg = e.err?.message || String(e);
-              vscode.window.showErrorMessage(`Failed to clone: ${msg}`);
-              panel.webview.postMessage({ command: "operation_error", message: `Clone failed: ${msg}` });
+              const msg = e.err?.message || e.stderr || String(e);
+              console.error("Install failed:", e);
+              vscode.window.showErrorMessage(`Installation failed: ${msg}`);
+              panel.webview.postMessage({ command: "operation_error", message: `Install failed: ${msg}` });
             }
             return;
         }
@@ -2992,7 +3181,8 @@ function listMcpServers() {
       image: info.image,
       iconUrl: info.icon,
       category: info.metadata?.category || "uncategorized",
-      enabled: enabledServers.includes(id)
+      enabled: enabledServers.includes(id),
+      configSchema: SERVER_CONFIGS[id] || void 0
     }));
     return servers;
   } catch (error) {

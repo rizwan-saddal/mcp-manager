@@ -4,6 +4,7 @@ import * as fs from 'node:fs';
 import * as cp from 'node:child_process';
 import * as yaml from 'js-yaml';
 import * as https from 'node:https';
+import { SERVER_CONFIGS } from './serverConfigs';
 
 interface ParsedServer {
     id: string;
@@ -83,31 +84,31 @@ export function activate(context: vscode.ExtensionContext) {
 
         panel.webview.onDidReceiveMessage(
             async message => {
-                const runCmd = (command: string): Promise<{ stdout: string, stderr: string }> => {
+                const runCmd = (command: string, cwd?: string): Promise<{ stdout: string, stderr: string }> => {
                     return new Promise((resolve, reject) => {
-                        const env = { ...process.env };
-                        // Ensure critical Windows environment variables are present to avoid ENOENT on cmd.exe
-                        if (process.platform === 'win32') {
-                            const systemRoot = env.SystemRoot || 'C:\\Windows';
-                            const system32 = path.join(systemRoot, 'System32');
-                            
-                            const paths = (env.Path || '').split(path.delimiter);
-                            if (!paths.some(p => p.toLowerCase() === system32.toLowerCase())) {
-                                paths.unshift(system32);
-                                env.Path = paths.join(path.delimiter);
-                            }
-                            
-                            if (!env.ComSpec) {
-                                env.ComSpec = path.join(system32, 'cmd.exe');
-                            }
-                        }
+                        console.log(`Executing: ${command} in ${cwd || 'default cwd'}`);
+                        const child = cp.spawn(command, {
+                            shell: true,
+                            cwd: cwd,
+                            env: process.env 
+                        });
 
-                        cp.exec(command, { env }, (err, stdout, stderr) => {
-                            if (err) {
-                                reject({ err, stdout, stderr });
-                            } else {
+                        let stdout = '';
+                        let stderr = '';
+
+                        child.stdout.on('data', (data) => { stdout += data.toString(); });
+                        child.stderr.on('data', (data) => { stderr += data.toString(); });
+
+                        child.on('close', (code) => {
+                            if (code === 0) {
                                 resolve({ stdout, stderr });
+                            } else {
+                                reject({ err: new Error(`Command failed with code ${code}`), stdout, stderr });
                             }
+                        });
+                        
+                        child.on('error', (err) => {
+                             reject({ err, stdout, stderr });
                         });
                     });
                 };
@@ -142,9 +143,16 @@ export function activate(context: vscode.ExtensionContext) {
                             }
                             if (!config.mcpServers) config.mcpServers = {};
 
+                            const envArgs: string[] = [];
+                            if (message.env) {
+                                for (const [key, value] of Object.entries(message.env)) {
+                                    envArgs.push("-e", `${key}=${value}`);
+                                }
+                            }
+
                             config.mcpServers[message.serverId] = {
                                 command: "docker",
-                                args: ["run", "-i", "--rm", server.image]
+                                args: ["run", "-i", "--rm", ...envArgs, server.image]
                             };
 
                             // Ensure directory exists
@@ -204,7 +212,7 @@ export function activate(context: vscode.ExtensionContext) {
                         }
                         return;
 
-                    case 'clone_server':
+                    case 'install_community_server':
                         const { repo, id } = message.server;
                         const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
                         
@@ -213,29 +221,146 @@ export function activate(context: vscode.ExtensionContext) {
                             return;
                         }
 
-                        const targetDir = path.join(workspaceFolder, 'mcp-servers', id);
-                        
-                        if (fs.existsSync(targetDir)) {
-                            vscode.window.showInformationMessage(`Server already exists at ${targetDir}`);
-                            panel.webview.postMessage({ command: 'server_cloned', serverId: id });
-                            return;
-                        }
-
-                        vscode.window.showInformationMessage(`Cloning ${id} server...`);
+                        vscode.window.showInformationMessage(`Installing ${id}...`);
                         
                         const mcpDir = path.join(workspaceFolder, 'mcp-servers');
+                        const serverDir = path.join(mcpDir, id);
+
                         if (!fs.existsSync(mcpDir)) {
                             fs.mkdirSync(mcpDir);
                         }
 
                         try {
-                            await runCmd(`git clone ${repo} ${path.join(mcpDir, id)}`);
-                            vscode.window.showInformationMessage(`Successfully cloned ${id}`);
-                            panel.webview.postMessage({ command: 'server_cloned', serverId: id });
+                            // 1. Clone
+                            if (!fs.existsSync(serverDir)) {
+                                await runCmd(`git clone ${repo} ${id}`, mcpDir);
+                            } else {
+                                console.log('Directory exists, skipping clone');
+                            }
+
+                            // 2. Detect & Install
+                            let config: any = { mcpServers: {} };
+                            const configPath = getMcpConfigPath();
+                            if (fs.existsSync(configPath)) {
+                                config = JSON.parse(fs.readFileSync(configPath, "utf8"));
+                            }
+                            if (!config.mcpServers) config.mcpServers = {};
+
+                            // Strategy A: Dockerfile (Highest Priority for reliability)
+                            if (fs.existsSync(path.join(serverDir, 'Dockerfile'))) {
+                                vscode.window.showInformationMessage(`Building Docker image for ${id}...`);
+                                panel.webview.postMessage({ command: 'operation_start', message: `Building Docker image...` });
+
+                                const imageName = `mcp-community-${id.toLowerCase()}`;
+                                await runCmd(`docker build -t ${imageName} .`, serverDir);
+
+                                config.mcpServers[id] = {
+                                    command: "docker",
+                                    args: ["run", "-i", "--rm", imageName]
+                                };
+                                
+                                fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+                                vscode.window.showInformationMessage(`Successfully installed - running via Docker!`);
+                                panel.webview.postMessage({ command: 'server_added', serverId: id });
+                            }
+                            // Strategy B: Node.js (package.json)
+                            else if (fs.existsSync(path.join(serverDir, 'package.json'))) {
+                                vscode.window.showInformationMessage(`Building Node.js server ${id}...`);
+                                panel.webview.postMessage({ command: 'operation_start', message: `Installing NPM dependencies...` });
+
+                                await runCmd('npm install', serverDir);
+                                await runCmd('npm run build', serverDir);
+
+                                // Try to find the built file
+                                let buildPath = path.join(serverDir, 'build', 'index.js');
+                                if (!fs.existsSync(buildPath)) {
+                                    buildPath = path.join(serverDir, 'dist', 'index.js');
+                                }
+                                if (!fs.existsSync(buildPath)) {
+                                     if (fs.existsSync(path.join(serverDir, 'index.js'))) {
+                                         buildPath = path.join(serverDir, 'index.js');
+                                     }
+                                }
+
+                                if (fs.existsSync(buildPath)) {
+                                    config.mcpServers[id] = {
+                                        command: "node",
+                                        args: [buildPath]
+                                    };
+                                    fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+                                    
+                                    vscode.window.showInformationMessage(`Successfully installed Node.js server!`);
+                                    panel.webview.postMessage({ command: 'server_added', serverId: id });
+                                } else {
+                                    vscode.window.showWarningMessage(`Built ${id}, but couldn't locate entry point. Check configuration.`);
+                                    panel.webview.postMessage({ command: 'server_cloned', serverId: id }); // Update UI but don't mark active yet
+                                }
+                            }
+                            // Strategy C: Python (pyproject.toml or requirements.txt)
+                            else if (fs.existsSync(path.join(serverDir, 'pyproject.toml')) || fs.existsSync(path.join(serverDir, 'requirements.txt'))) {
+                                vscode.window.showInformationMessage(`Setting up Python environment for ${id}...`);
+                                panel.webview.postMessage({ command: 'operation_start', message: `Creating venv & installing pip packages...` });
+
+                                // Create Venv
+                                await runCmd('python -m venv .venv', serverDir);
+                                
+                                const isWin = process.platform === 'win32';
+                                const venvBin = path.join(serverDir, '.venv', isWin ? 'Scripts' : 'bin');
+                                const pythonPath = path.join(venvBin, isWin ? 'python.exe' : 'python');
+                                const pipPath = path.join(venvBin, isWin ? 'pip.exe' : 'pip');
+
+                                // Install deps
+                                // Use the venv python to install to ensure we use the venv
+                                await runCmd(`"${pythonPath}" -m pip install .`, serverDir);
+
+                                // Attempt to detect entry point script
+                                let scriptName = id;
+                                const pyprojectPath = path.join(serverDir, 'pyproject.toml');
+                                if (fs.existsSync(pyprojectPath)) {
+                                    try {
+                                        const content = fs.readFileSync(pyprojectPath, 'utf8');
+                                        // Simple regex to find a script entry in [project.scripts]
+                                        // matches: name = "..."
+                                        const match = content.match(/\[project\.scripts\][^[]*?([\w-]+)\s*=/s);
+                                        if (match) {
+                                            scriptName = match[1];
+                                        }
+                                    } catch (e) {
+                                        console.log('Error parsing pyproject.toml', e);
+                                    }
+                                }
+
+                                // Check if a script executable was created in venv/Scripts
+                                const scriptPath = path.join(venvBin, isWin ? `${scriptName}.exe` : scriptName);
+                                
+                                if (fs.existsSync(scriptPath)) {
+                                    config.mcpServers[id] = {
+                                        command: scriptPath,
+                                        args: []
+                                    };
+                                } else {
+                                    // Fallback: python -m <id> or python -m <scriptName>
+                                    config.mcpServers[id] = {
+                                        command: pythonPath,
+                                        args: ["-m", scriptName]
+                                    };
+                                }
+
+                                fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+                                vscode.window.showInformationMessage(`Successfully installed Python server!`);
+                                panel.webview.postMessage({ command: 'server_added', serverId: id });
+                            }
+                            else {
+                                // Unknown structure
+                                vscode.window.showInformationMessage(`Cloned ${id} to ${serverDir}. Please configure manually.`);
+                                panel.webview.postMessage({ command: 'server_cloned', serverId: id });
+                            }
+
                         } catch (e: any) {
-                            const msg = e.err?.message || String(e);
-                            vscode.window.showErrorMessage(`Failed to clone: ${msg}`);
-                            panel.webview.postMessage({ command: 'operation_error', message: `Clone failed: ${msg}` });
+                            const msg = e.err?.message || e.stderr || String(e);
+                            console.error('Install failed:', e);
+                            vscode.window.showErrorMessage(`Installation failed: ${msg}`);
+                            panel.webview.postMessage({ command: 'operation_error', message: `Install failed: ${msg}` });
                         }
                         return;
                 }
@@ -454,7 +579,8 @@ function listMcpServers() {
             image: info.image,
             iconUrl: info.icon,
             category: info.metadata?.category || "uncategorized",
-            enabled: enabledServers.includes(id)
+            enabled: enabledServers.includes(id),
+            configSchema: SERVER_CONFIGS[id] || undefined
         }));
 
         return servers;

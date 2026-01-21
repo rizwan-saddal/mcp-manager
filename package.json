@@ -15,9 +15,6 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": [
-    "onCommand:mcp-manager.openDashboard"
-  ],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [

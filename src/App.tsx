@@ -1,4 +1,4 @@
-import { useState, useEffect, type ReactNode } from 'react';
+import { useState, useEffect, useRef, type ReactNode } from 'react';
 import { 
   Search, 
   Box, 
@@ -30,9 +30,22 @@ interface McpServer {
   enabled: boolean;
   status?: ServerStatus;
   
+  configSchema?: ConfigField[];
+  
   // Community specific
   repo?: string; 
   subpath?: string;
+}
+
+interface ConfigField {
+  key: string;
+  label: string;
+  type: 'text' | 'password' | 'number' | 'path' | 'email';
+  required: boolean;
+  description: string;
+  placeholder?: string;
+  pattern?: string; 
+  errorMessage?: string; 
 }
 
 type DataSource = 'docker' | 'community';
@@ -57,6 +70,7 @@ export default function App() {
     { id: 'init', time: new Date().toLocaleTimeString(), message: 'Dashboard initialized', type: 'info' }
   ]);
   const [dockerChecked, setDockerChecked] = useState(false);
+  const [configuringServer, setConfiguringServer] = useState<McpServer | null>(null);
 
   const addLog = (message: string, type: LogType = 'info') => {
     setLogs(prev => [{
@@ -66,6 +80,18 @@ export default function App() {
       type
     }, ...prev]);
   };
+
+  // Keep refs for values needed inside the event listener
+  const dataSourceRef = useRef(dataSource);
+  const dockerCheckedRef = useRef(dockerChecked);
+
+  useEffect(() => {
+    dataSourceRef.current = dataSource;
+  }, [dataSource]);
+
+  useEffect(() => {
+    dockerCheckedRef.current = dockerChecked;
+  }, [dockerChecked]);
 
   useEffect(() => {
     // Initial load
@@ -77,6 +103,9 @@ export default function App() {
 
     const handler = (event: MessageEvent) => {
         const message = event.data;
+        const currentDataSource = dataSourceRef.current;
+        const isDockerChecked = dockerCheckedRef.current;
+
         switch (message.command) {
             case 'docker_status':
                 setDockerChecked(true);
@@ -90,7 +119,7 @@ export default function App() {
                 break;
             case 'servers_list':
                 setServers(message.data);
-                if (dockerChecked || dataSource === 'docker') {
+                if (isDockerChecked || currentDataSource === 'docker') {
                     setLoading(false);
                 }
                 setError(null);
@@ -131,7 +160,7 @@ export default function App() {
 
     globalThis.window?.addEventListener('message', handler);
     return () => globalThis.window?.removeEventListener('message', handler);
-  }, [dockerChecked, dataSource]);
+  }, []);
 
   const [search, setSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
@@ -158,8 +187,8 @@ export default function App() {
   const toggleServer = (server: McpServer) => {
     if (globalThis.window?.vscode) {
         if (dataSource === 'community') {
-            addLog(`Initiating clone for ${server.id}...`, 'info');
-            globalThis.window.vscode.postMessage({ command: 'clone_server', server });
+            addLog(`Initiating installation for ${server.id}...`, 'info');
+            globalThis.window.vscode.postMessage({ command: 'install_community_server', server });
             return;
         }
 
@@ -167,10 +196,21 @@ export default function App() {
             addLog(`Stopping server: ${server.id}...`, 'info');
             globalThis.window.vscode.postMessage({ command: 'remove_server', serverId: server.id });
         } else {
+            if (server.configSchema && server.configSchema.length > 0) {
+                setConfiguringServer(server);
+                return;
+            }
             addLog(`Starting server: ${server.id}...`, 'info');
             globalThis.window.vscode.postMessage({ command: 'add_server', serverId: server.id });
         }
     }
+  };
+
+  const handleConfigSubmit = (env: Record<string, string>) => {
+      if (!configuringServer) return;
+      addLog(`Starting server with config: ${configuringServer.id}...`, 'info');
+      globalThis.window.vscode.postMessage({ command: 'add_server', serverId: configuringServer.id, env });
+      setConfiguringServer(null);
   };
 
   return (
@@ -216,7 +256,7 @@ export default function App() {
           <div className="glass px-8 py-4 flex items-center gap-8 bg-black/20">
             <div className="text-right">
               <div className="mono text-3xl font-light text-white">
-                  {dataSource === 'docker' ? servers.filter(s => s.enabled).length : communityServers.length}
+                  {dataSource === 'docker' ? filteredServers.filter(s => s.enabled).length : filteredServers.length}
               </div>
               <div className="text-[9px] uppercase tracking-[0.2em] text-text-muted font-medium mt-1">
                   {dataSource === 'docker' ? 'Active' : 'Available'}
@@ -225,7 +265,7 @@ export default function App() {
             <div className="w-px h-10 bg-white/10" />
             <div>
               <div className="mono text-3xl font-light text-white/40">
-                  {dataSource === 'docker' ? servers.length : communityServers.length}
+                  {filteredServers.length}
               </div>
               <div className="text-[9px] uppercase tracking-[0.2em] text-text-muted font-medium mt-1">Total</div>
             </div>
@@ -397,6 +437,16 @@ export default function App() {
           )}
         </main>
       </div>
+
+      <AnimatePresence>
+        {configuringServer && (
+            <ConfigModal 
+                server={configuringServer} 
+                onClose={() => setConfiguringServer(null)} 
+                onSubmit={handleConfigSubmit} 
+            />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -412,12 +462,12 @@ function ActionButton({ server, dataSource, onToggle }: ActionButtonProps) {
   let content: ReactNode = null;
 
   if (dataSource === 'community') {
-    className += "bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 hover:text-purple-300 border border-purple-500/20 hover:border-purple-500/40";
+    className += "bg-white/10 text-white hover:bg-neon-cyan hover:text-black hover:shadow-[0_0_25px_-5px_rgba(34,211,238,0.6)] border border-white/10 hover:border-neon-cyan";
     content = (
       <>
-        <span className="text-lg leading-none">↓</span>
+        <span className="text-lg leading-none">+</span>
         {' '}
-        CLONE REPO
+        INITIALIZE SYSTEM
       </>
     );
   } else if (server.enabled) {
@@ -498,4 +548,121 @@ function getCategoryIcon(category: string) {
     case 'AI': return <Cpu className="w-5 h-5" />;
     default: return <Cloud className="w-5 h-5" />;
   }
+}
+
+interface ConfigModalProps {
+    server: McpServer;
+    onClose: () => void;
+    onSubmit: (env: Record<string, string>) => void;
+}
+
+function ConfigModal({ server, onClose, onSubmit }: ConfigModalProps) {
+    const [values, setValues] = useState<Record<string, string>>({});
+    const [errors, setErrors] = useState<Record<string, string>>({});
+
+    const handleChange = (key: string, value: string, field: ConfigField) => {
+        setValues(prev => ({ ...prev, [key]: value }));
+        
+        if (field.pattern) {
+            const regex = new RegExp(field.pattern);
+            if (!regex.test(value)) {
+                setErrors(prev => ({ ...prev, [key]: field.errorMessage || 'Invalid format' }));
+            } else {
+                 setErrors(prev => {
+                     const next = { ...prev };
+                     delete next[key];
+                     return next;
+                 });
+            }
+        }
+    };
+
+    const isValid = server.configSchema?.every(field => {
+        if (field.required && !values[field.key]) return false;
+        if (errors[field.key]) return false;
+        return true;
+    }) ?? true;
+
+    return (
+        <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+        >
+            <motion.div 
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+                className="bg-[#0D0D0D] border border-white/10 rounded-2xl w-full max-w-lg shadow-[0_0_50px_-10px_rgba(0,0,0,0.5)] overflow-hidden flex flex-col max-h-[90vh]"
+            >
+                <div className="p-6 border-b border-white/5 flex items-center justify-between bg-white/5">
+                    <div>
+                        <h2 className="text-xl font-bold text-white tracking-tight">Configure {server.title}</h2>
+                        <p className="text-text-secondary text-xs mt-1">Configure environment variables for this server.</p>
+                    </div>
+                    <button onClick={onClose} className="text-text-muted hover:text-white transition-colors" aria-label="Close configuration" title="Close">
+                        <XCircle className="w-6 h-6" />
+                    </button>
+                </div>
+
+                <div className="p-6 space-y-6 overflow-y-auto custom-scrollbar">
+                    {server.configSchema?.map(field => (
+                        <div key={field.key} className="space-y-2 group">
+                            <label className="text-xs font-mono uppercase tracking-wider text-neon-cyan/80 group-focus-within:text-neon-cyan transition-colors">
+                                {field.label} {field.required && <span className="text-rose-400">*</span>}
+                            </label>
+                            <div className="relative">
+                                <input
+                                    type={field.type === 'path' ? 'text' : field.type}
+                                    className={`w-full bg-black/40 border rounded-lg px-4 py-3 text-sm focus:outline-none transition-all placeholder:text-white/20
+                                        ${errors[field.key] 
+                                            ? 'border-rose-500/50 focus:border-rose-500' 
+                                            : 'border-white/10 focus:border-neon-cyan/50 focus:shadow-[0_0_15px_-5px_rgba(34,211,238,0.2)]'
+                                        }
+                                        text-white
+                                    `}
+                                    placeholder={field.placeholder}
+                                    value={values[field.key] || ''}
+                                    onChange={(e) => handleChange(field.key, e.target.value, field)}
+                                />
+                            </div>
+                            {errors[field.key] && (
+                                <p className="text-[10px] text-rose-400 font-mono flex items-center gap-1">
+                                    <span className="inline-block w-1 h-1 bg-rose-400 rounded-full"/>
+                                    {errors[field.key]}
+                                </p>
+                            )}
+                            {field.description && !errors[field.key] && (
+                                <p className="text-[11px] text-text-muted/70 leading-relaxed font-light">
+                                    {field.description}
+                                </p>
+                            )}
+                        </div>
+                    ))}
+                </div>
+
+                <div className="p-6 border-t border-white/5 bg-white/5 flex justify-end gap-3">
+                    <button 
+                        onClick={onClose}
+                        className="px-5 py-2.5 rounded-xl text-xs font-medium text-text-muted hover:bg-white/5 transition-colors"
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        disabled={!isValid}
+                        onClick={() => onSubmit(values)}
+                        className={`px-6 py-2.5 rounded-xl text-xs font-bold tracking-wide transition-all duration-300
+                            ${isValid 
+                                ? 'bg-neon-cyan text-black hover:shadow-[0_0_20px_-5px_rgba(34,211,238,0.5)] hover:scale-105' 
+                                : 'bg-white/5 text-white/30 cursor-not-allowed border border-white/5'
+                            }
+                        `}
+                    >
+                        INITIALIZE SYSTEM
+                    </button>
+                </div>
+            </motion.div>
+        </motion.div>
+    );
 }
