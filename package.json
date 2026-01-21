@@ -41,6 +41,8 @@
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.18",
+    "@types/adm-zip": "^0.5.7",
+    "adm-zip": "^0.5.16",
     "clsx": "^2.1.1",
     "framer-motion": "^12.26.2",
     "js-yaml": "^4.1.0",

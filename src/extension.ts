@@ -4,6 +4,7 @@ import * as fs from 'node:fs';
 import * as cp from 'node:child_process';
 import * as yaml from 'js-yaml';
 import * as https from 'node:https';
+import AdmZip from 'adm-zip';
 import { SERVER_CONFIGS } from './serverConfigs';
 
 interface ParsedServer {
@@ -802,49 +803,16 @@ function downloadFile(url: string, dest: string): Promise<void> {
 }
 
 async function extractZip(zipPath: string, destDir: string): Promise<void> {
-    const isWindows = process.platform === 'win32';
-    
-    if (isWindows) {
-        const shellPath = process.env.ComSpec || 'C:\\Windows\\System32\\cmd.exe';
-        
-        const attemptUnzip = (exe: string) => {
-            return new Promise<void>((resolve, reject) => {
-                const command = `${exe} -Command "Expand-Archive -Path '${zipPath}' -DestinationPath '${destDir}' -Force"`;
-                cp.exec(command, { shell: shellPath }, (err, stdout, stderr) => {
-                    if (err) {
-                        reject(err);
-                    } else {
-                        resolve();
-                    }
-                });
-            });
-        }
-
+    return new Promise((resolve, reject) => {
         try {
-            await attemptUnzip('powershell');
-        } catch (e) {
-            console.log('powershell failed, trying pwsh...');
-            try {
-                await attemptUnzip('pwsh');
-            } catch (e2) {
-                console.error('Unzip error (Windows):', e2);
-                throw e2;
-            }
+            const zip = new AdmZip(zipPath);
+            zip.extractAllTo(destDir, true);
+            resolve();
+        } catch (err) {
+            console.error('Unzip error (AdmZip):', err);
+            reject(err);
         }
-    } else {
-        return new Promise((resolve, reject) => {
-            // Unix/Linux/macOS fallback
-            const command = `unzip -o "${zipPath}" -d "${destDir}"`;
-            cp.exec(command, (err, stdout, stderr) => {
-                if (err) {
-                    console.error('Unzip error (Unix):', stderr);
-                    reject(err);
-                } else {
-                    resolve();
-                }
-            });
-        });
-    }
+    });
 }
 
 async function fetchAndParseCommunityServers(): Promise<ParsedServer[]> {
