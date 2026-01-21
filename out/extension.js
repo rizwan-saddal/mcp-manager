@@ -2779,7 +2779,7 @@ function activate(context) {
     );
     panel.webview.onDidReceiveMessage(
       async (message) => {
-        const runCmd = (command, cwd) => {
+        const runCmd = (command, cwd, logCommand) => {
           return new Promise((resolve, reject) => {
             const isWindows = process.platform === "win32";
             if (cwd && !fs.existsSync(cwd)) {
@@ -2789,7 +2789,8 @@ function activate(context) {
               reject({ err: new Error(`Working directory does not exist: ${cwd}`), stdout: "", stderr: "" });
               return;
             }
-            const logMsg = `Executing: ${command} in ${cwd || "default cwd"}`;
+            const displayCmd = logCommand || command;
+            const logMsg = `Executing: ${displayCmd} in ${cwd || "default cwd"}`;
             console.log(logMsg);
             outputChannel.appendLine(logMsg);
             const shellPath = isWindows ? process.env.ComSpec || "C:\\Windows\\System32\\cmd.exe" : true;
@@ -2914,18 +2915,11 @@ function activate(context) {
             }
             return;
           case "install_community_server":
-            const { repo, id } = message.server;
+            const { repo, id, subpath } = message.server;
             const envVars = message.env || {};
             const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
             if (!workspaceFolder) {
               vscode.window.showErrorMessage("No workspace folder open. Please open a folder to clone the server.");
-              return;
-            }
-            try {
-              await runCmd("git --version");
-            } catch (e) {
-              vscode.window.showErrorMessage("Git is not available. Please install Git and reload VS Code.");
-              panel.webview.postMessage({ command: "operation_error", message: "Git not found in PATH" });
               return;
             }
             vscode.window.showInformationMessage(`Installing ${id}...`);
@@ -2937,11 +2931,47 @@ function activate(context) {
             }
             try {
               if (!fs.existsSync(serverDir)) {
-                outputChannel.appendLine(`Cloning ${repo} to ${serverDir}...`);
-                await runCmd(`git clone ${repo} ${id}`, mcpDir);
+                outputChannel.appendLine(`Downloading source from ${repo}...`);
+                let archiveUrl = repo;
+                if (repo.endsWith(".git")) archiveUrl = repo.slice(0, -4);
+                if (!archiveUrl.endsWith(".zip")) {
+                  archiveUrl = `${archiveUrl}/archive/HEAD.zip`;
+                }
+                const zipPath = path.join(mcpDir, `${id}.zip`);
+                const tempExtractDir = path.join(mcpDir, `${id}_temp`);
+                try {
+                  outputChannel.appendLine(`Downloading ${archiveUrl}...`);
+                  await downloadFile(archiveUrl, zipPath);
+                  outputChannel.appendLine(`Extracting...`);
+                  if (fs.existsSync(tempExtractDir)) fs.rmSync(tempExtractDir, { recursive: true, force: true });
+                  fs.mkdirSync(tempExtractDir);
+                  await extractZip(zipPath, tempExtractDir);
+                  const extractedFiles = fs.readdirSync(tempExtractDir);
+                  let sourcePath = tempExtractDir;
+                  if (extractedFiles.length === 1 && fs.statSync(path.join(tempExtractDir, extractedFiles[0])).isDirectory()) {
+                    sourcePath = path.join(tempExtractDir, extractedFiles[0]);
+                  }
+                  if (subpath) {
+                    const subPathFull = path.join(sourcePath, subpath);
+                    if (fs.existsSync(subPathFull)) {
+                      outputChannel.appendLine(`Using subpath: ${subpath}`);
+                      sourcePath = subPathFull;
+                    } else {
+                      outputChannel.appendLine(`Warning: Subpath ${subpath} not found in zip. Using root.`);
+                    }
+                  }
+                  fs.renameSync(sourcePath, serverDir);
+                  if (fs.existsSync(zipPath)) fs.unlinkSync(zipPath);
+                  if (fs.existsSync(tempExtractDir)) fs.rmSync(tempExtractDir, { recursive: true, force: true });
+                  outputChannel.appendLine(`Source code installed to ${serverDir}`);
+                } catch (err) {
+                  if (fs.existsSync(zipPath)) fs.unlinkSync(zipPath);
+                  if (fs.existsSync(tempExtractDir)) fs.rmSync(tempExtractDir, { recursive: true, force: true });
+                  throw new Error(`Download failed: ${err.message}`);
+                }
               } else {
-                console.log("Directory exists, skipping clone");
-                outputChannel.appendLine(`Directory ${serverDir} exists, skipping clone.`);
+                console.log("Directory exists, skipping download");
+                outputChannel.appendLine(`Directory ${serverDir} exists, skipping download.`);
               }
               let config = { mcpServers: {} };
               const configPath = getMcpConfigPath();
@@ -3041,9 +3071,14 @@ function activate(context) {
               console.error("Install failed:", e);
               outputChannel.appendLine(`[Error] Install failed: ${msg}`);
               outputChannel.appendLine(`[Details] ${details}`);
-              vscode.window.showErrorMessage(`Installation failed: ${msg}. Check 'MCP Manager' output for details.`);
-              panel.webview.postMessage({ command: "operation_error", message: `Install failed: ${msg}
-${details}` });
+              let userMessage = `Installation failed: ${msg}. Check 'MCP Manager' output for details.`;
+              if (details.includes("'git'") && details.includes("not recognized") || msg.includes("spawn git ENOENT") || details.includes("command not found")) {
+                userMessage = "Git is required but was not detected. Please ensure Git is installed and available in your PATH.";
+              }
+              vscode.window.showErrorMessage(userMessage);
+              panel.webview.postMessage({ command: "operation_error", message: userMessage + `
+
+Details: ${details}` });
             }
             return;
         }
@@ -3153,9 +3188,11 @@ async function runMcpToolCall(config, toolName, args) {
         arguments: args
       }
     };
+    const isWindows = process.platform === "win32";
+    const shellPath = isWindows ? process.env.ComSpec || "C:\\Windows\\System32\\cmd.exe" : true;
     const cp_proc = cp.spawn(config.command, dockerArgs, {
       env: { ...process.env, ...config.env || {} },
-      shell: true
+      shell: shellPath
     });
     let stdout = "";
     let stderr = "";
@@ -3272,6 +3309,84 @@ function getWebviewContent(webview, extensionUri) {
     <script type="module" nonce="${nonce}" src="${scriptUri}"></script>
 </body>
 </html>`;
+}
+function downloadFile(url, dest) {
+  return new Promise((resolve, reject) => {
+    const file = fs.createWriteStream(dest);
+    const handleResponse = (response) => {
+      if (response.statusCode === 301 || response.statusCode === 302 || response.statusCode === 307) {
+        if (response.headers.location) {
+          const redirectUrl = response.headers.location;
+          https.get(redirectUrl, handleResponse).on("error", (err) => {
+            file.close();
+            fs.unlink(dest, () => {
+            });
+            reject(err);
+          });
+          return;
+        }
+      }
+      if (response.statusCode !== 200) {
+        file.close();
+        fs.unlink(dest, () => {
+        });
+        reject(new Error(`HTTP Status ${response.statusCode}`));
+        return;
+      }
+      response.pipe(file);
+      file.on("finish", () => {
+        file.close();
+        resolve();
+      });
+    };
+    const request = https.get(url, { headers: { "User-Agent": "VSCode-MCP-Manager" } }, handleResponse);
+    request.on("error", (err) => {
+      fs.unlink(dest, () => {
+      });
+      reject(err);
+    });
+  });
+}
+async function extractZip(zipPath, destDir) {
+  const isWindows = process.platform === "win32";
+  if (isWindows) {
+    const shellPath = process.env.ComSpec || "C:\\Windows\\System32\\cmd.exe";
+    const attemptUnzip = (exe) => {
+      return new Promise((resolve, reject) => {
+        const command = `${exe} -Command "Expand-Archive -Path '${zipPath}' -DestinationPath '${destDir}' -Force"`;
+        cp.exec(command, { shell: shellPath }, (err, stdout, stderr) => {
+          if (err) {
+            reject(err);
+          } else {
+            resolve();
+          }
+        });
+      });
+    };
+    try {
+      await attemptUnzip("powershell");
+    } catch (e) {
+      console.log("powershell failed, trying pwsh...");
+      try {
+        await attemptUnzip("pwsh");
+      } catch (e2) {
+        console.error("Unzip error (Windows):", e2);
+        throw e2;
+      }
+    }
+  } else {
+    return new Promise((resolve, reject) => {
+      const command = `unzip -o "${zipPath}" -d "${destDir}"`;
+      cp.exec(command, (err, stdout, stderr) => {
+        if (err) {
+          console.error("Unzip error (Unix):", stderr);
+          reject(err);
+        } else {
+          resolve();
+        }
+      });
+    });
+  }
 }
 async function fetchAndParseCommunityServers() {
   const README_URL = "https://raw.githubusercontent.com/modelcontextprotocol/servers/main/README.md";

@@ -245,7 +245,7 @@ export function activate(context: vscode.ExtensionContext) {
                         return;
 
                     case 'install_community_server':
-                        const { repo, id } = message.server;
+                        const { repo, id, subpath } = message.server;
                         const envVars = message.env || {};
                         const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
                         
@@ -268,33 +268,69 @@ export function activate(context: vscode.ExtensionContext) {
 
                         try {
                             // 1. Clone
+                            // 1. Download & Extract Code (No Git Required)
                             if (!fs.existsSync(serverDir)) {
-                                let cloneUrl = repo;
-                                let logUrl = repo;
-
-                                // Attempt to use VS Code Authentication for GitHub
-                                if (repo.includes('github.com')) {
-                                    try {
-                                        const session = await vscode.authentication.getSession('github', ['repo'], { createIfNone: false });
-                                        if (session) {
-                                            // Inject token into URL
-                                            // Format: https://x-access-token:TOKEN@github.com/owner/repo.git
-                                            const token = session.accessToken;
-                                            const repoPath = repo.replace('https://github.com/', '').replace('.git', '');
-                                            cloneUrl = `https://x-access-token:${token}@github.com/${repoPath}.git`;
-                                            logUrl = `https://github.com/${repoPath}.git (Authenticated)`;
-                                            outputChannel.appendLine(`Using GitHub authentication for ${repoPath}`);
-                                        }
-                                    } catch (e) {
-                                        console.warn('Failed to get GitHub session, falling back to public clone', e);
-                                    }
+                                outputChannel.appendLine(`Downloading source from ${repo}...`);
+                                
+                                let archiveUrl = repo;
+                                if (repo.endsWith('.git')) archiveUrl = repo.slice(0, -4);
+                                
+                                // Construct Zip URL for GitHub
+                                // Supporting both main and master is tricky without checking, but HEAD usually points to default
+                                if (!archiveUrl.endsWith('.zip')) {
+                                    archiveUrl = `${archiveUrl}/archive/HEAD.zip`;
                                 }
 
-                                outputChannel.appendLine(`Cloning ${logUrl} to ${serverDir}...`);
-                                await runCmd(`git clone ${cloneUrl} ${id}`, mcpDir, `git clone ${logUrl} ${id}`);
+                                const zipPath = path.join(mcpDir, `${id}.zip`);
+                                const tempExtractDir = path.join(mcpDir, `${id}_temp`);
+
+                                try {
+                                    outputChannel.appendLine(`Downloading ${archiveUrl}...`);
+                                    await downloadFile(archiveUrl, zipPath);
+                                    
+                                    outputChannel.appendLine(`Extracting...`);
+                                    if (fs.existsSync(tempExtractDir)) fs.rmSync(tempExtractDir, { recursive: true, force: true });
+                                    fs.mkdirSync(tempExtractDir);
+
+                                    await extractZip(zipPath, tempExtractDir);
+                                    
+                                    // Handle GitHub's nested folder structure (repo-branch)
+                                    const extractedFiles = fs.readdirSync(tempExtractDir);
+                                    let sourcePath = tempExtractDir;
+                                    
+                                    if (extractedFiles.length === 1 && fs.statSync(path.join(tempExtractDir, extractedFiles[0])).isDirectory()) {
+                                        sourcePath = path.join(tempExtractDir, extractedFiles[0]);
+                                    }
+
+                                    // Handle Subpath (e.g. src/fetch in monorepo)
+                                    if (subpath) {
+                                        const subPathFull = path.join(sourcePath, subpath);
+                                        if (fs.existsSync(subPathFull)) {
+                                            outputChannel.appendLine(`Using subpath: ${subpath}`);
+                                            sourcePath = subPathFull;
+                                        } else {
+                                            outputChannel.appendLine(`Warning: Subpath ${subpath} not found in zip. Using root.`);
+                                        }
+                                    }
+
+                                    // Move to final destination
+                                    fs.renameSync(sourcePath, serverDir);
+                                    
+                                    // Cleanup
+                                    if (fs.existsSync(zipPath)) fs.unlinkSync(zipPath);
+                                    if (fs.existsSync(tempExtractDir)) fs.rmSync(tempExtractDir, { recursive: true, force: true });
+                                    
+                                    outputChannel.appendLine(`Source code installed to ${serverDir}`);
+
+                                } catch (err: any) {
+                                    // Cleanup on failure
+                                    if (fs.existsSync(zipPath)) fs.unlinkSync(zipPath);
+                                    if (fs.existsSync(tempExtractDir)) fs.rmSync(tempExtractDir, { recursive: true, force: true });
+                                    throw new Error(`Download failed: ${err.message}`);
+                                }
                             } else {
-                                console.log('Directory exists, skipping clone');
-                                outputChannel.appendLine(`Directory ${serverDir} exists, skipping clone.`);
+                                console.log('Directory exists, skipping download');
+                                outputChannel.appendLine(`Directory ${serverDir} exists, skipping download.`);
                             }
 
                             // 2. Detect & Install
@@ -570,9 +606,12 @@ async function runMcpToolCall(config: any, toolName: string, args: any): Promise
             }
         };
 
+        const isWindows = process.platform === 'win32';
+        const shellPath = isWindows ? (process.env.ComSpec || 'C:\\Windows\\System32\\cmd.exe') : true;
+
         const cp_proc = cp.spawn(config.command, dockerArgs, {
             env: { ...process.env, ...(config.env || {}) },
-            shell: true
+            shell: shellPath
         });
 
         let stdout = '';
@@ -717,6 +756,95 @@ function getWebviewContent(webview: vscode.Webview, extensionUri: vscode.Uri) {
     <script type="module" nonce="${nonce}" src="${scriptUri}"></script>
 </body>
 </html>`;
+}
+
+async function resolveGitPath(): Promise<string> {
+   return 'git';
+}
+
+function downloadFile(url: string, dest: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+        const file = fs.createWriteStream(dest);
+        const handleResponse = (response: any) => {
+            // Handle redirects
+            if (response.statusCode === 301 || response.statusCode === 302 || response.statusCode === 307) {
+                if (response.headers.location) {
+                    const redirectUrl = response.headers.location;
+                    https.get(redirectUrl, handleResponse).on('error', (err) => {
+                         file.close();
+                         fs.unlink(dest, () => {});
+                         reject(err);
+                    });
+                    return;
+                }
+            }
+
+            if (response.statusCode !== 200) {
+                file.close();
+                fs.unlink(dest, () => {});
+                reject(new Error(`HTTP Status ${response.statusCode}`));
+                return;
+            }
+
+            response.pipe(file);
+            file.on('finish', () => {
+                file.close();
+                resolve();
+            });
+        };
+
+        const request = https.get(url, { headers: { 'User-Agent': 'VSCode-MCP-Manager' } }, handleResponse);
+        request.on('error', (err) => {
+            fs.unlink(dest, () => {});
+            reject(err);
+        });
+    });
+}
+
+async function extractZip(zipPath: string, destDir: string): Promise<void> {
+    const isWindows = process.platform === 'win32';
+    
+    if (isWindows) {
+        const shellPath = process.env.ComSpec || 'C:\\Windows\\System32\\cmd.exe';
+        
+        const attemptUnzip = (exe: string) => {
+            return new Promise<void>((resolve, reject) => {
+                const command = `${exe} -Command "Expand-Archive -Path '${zipPath}' -DestinationPath '${destDir}' -Force"`;
+                cp.exec(command, { shell: shellPath }, (err, stdout, stderr) => {
+                    if (err) {
+                        reject(err);
+                    } else {
+                        resolve();
+                    }
+                });
+            });
+        }
+
+        try {
+            await attemptUnzip('powershell');
+        } catch (e) {
+            console.log('powershell failed, trying pwsh...');
+            try {
+                await attemptUnzip('pwsh');
+            } catch (e2) {
+                console.error('Unzip error (Windows):', e2);
+                throw e2;
+            }
+        }
+    } else {
+        return new Promise((resolve, reject) => {
+            // Unix/Linux/macOS fallback
+            const command = `unzip -o "${zipPath}" -d "${destDir}"`;
+            cp.exec(command, (err, stdout, stderr) => {
+                if (err) {
+                    console.error('Unzip error (Unix):', stderr);
+                    reject(err);
+                } else {
+                    resolve();
+                }
+            });
+        });
+    }
 }
 
 async function fetchAndParseCommunityServers(): Promise<ParsedServer[]> {

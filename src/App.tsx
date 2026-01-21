@@ -71,6 +71,7 @@ export default function App() {
   ]);
   const [dockerChecked, setDockerChecked] = useState(false);
   const [configuringServer, setConfiguringServer] = useState<McpServer | null>(null);
+  const [operationStatus, setOperationStatus] = useState<{ processing: boolean; message: string }>({ processing: false, message: '' });
 
   const addLog = (message: string, type: LogType = 'info') => {
     setLogs(prev => [{
@@ -140,18 +141,26 @@ export default function App() {
                 addLog(`Server enabled: ${message.serverId}`, 'success');
                 // Refresh server list to show enabled state
                 globalThis.window.vscode.postMessage({ command: 'list_servers' });
+                setOperationStatus({ processing: false, message: '' });
                 break;
             case 'server_removed':
                 addLog(`Server disabled: ${message.serverId}`, 'info');
                 // Refresh server list
                 globalThis.window.vscode.postMessage({ command: 'list_servers' });
+                // Stop operation status if it was a stopping action
+                setOperationStatus({ processing: false, message: '' });
                 break;
             case 'server_cloned':
                 addLog(`Server cloned successfully: ${message.serverId}`, 'success');
+                setOperationStatus({ processing: false, message: '' });
+                break;
+            case 'operation_start':
+                setOperationStatus({ processing: true, message: message.message || 'Processing...' });
                 break;
             case 'error':
             case 'operation_error':
                 setLoading(false);
+                setOperationStatus({ processing: false, message: '' });
                 setError(message.message);
                 addLog(`Error: ${message.message}`, 'error');
                 break;
@@ -184,7 +193,11 @@ export default function App() {
     setCurrentPage(1);
   }, [search, activeCategory]);
 
+
+
   const toggleServer = (server: McpServer) => {
+    if (operationStatus.processing) return; // Prevent actions while processing
+
     if (globalThis.window?.vscode) {
         if (dataSource === 'community') {
             if (server.configSchema && server.configSchema.length > 0) {
@@ -192,12 +205,14 @@ export default function App() {
                 return;
             }
             addLog(`Initiating installation for ${server.id}...`, 'info');
+            setOperationStatus({ processing: true, message: `Initiating installation for ${server.title}...` });
             globalThis.window.vscode.postMessage({ command: 'install_community_server', server });
             return;
         }
 
         if (server.enabled) {
             addLog(`Stopping server: ${server.id}...`, 'info');
+            setOperationStatus({ processing: true, message: `Stopping ${server.title}...` });
             globalThis.window.vscode.postMessage({ command: 'remove_server', serverId: server.id });
         } else {
             if (server.configSchema && server.configSchema.length > 0) {
@@ -205,6 +220,7 @@ export default function App() {
                 return;
             }
             addLog(`Starting server: ${server.id}...`, 'info');
+            setOperationStatus({ processing: true, message: `Starting ${server.title}...` });
             globalThis.window.vscode.postMessage({ command: 'add_server', serverId: server.id });
         }
     }
@@ -220,6 +236,7 @@ export default function App() {
       } else {
           // Docker/Local Server
           addLog(`Starting server with config: ${configuringServer.id}...`, 'info');
+          setOperationStatus({ processing: true, message: `Configuring & Starting ${configuringServer.title}...` });
           globalThis.window.vscode.postMessage({ command: 'add_server', serverId: configuringServer.id, env });
       }
       setConfiguringServer(null);
@@ -396,9 +413,10 @@ export default function App() {
 
                     <p className="text-text-secondary/70 text-[11px] leading-relaxed mb-3 font-light line-clamp-2 min-h-[2.5em] grow">{s.description}</p>
 
-                     <ActionButton 
+                      <ActionButton 
                         server={s} 
                         dataSource={dataSource} 
+                        isProcessing={operationStatus.processing}
                         onToggle={() => toggleServer(s)} 
                       />
                   </div>
@@ -447,6 +465,9 @@ export default function App() {
                 onSubmit={handleConfigSubmit} 
             />
         )}
+        {operationStatus.processing && (
+            <LoaderModal message={operationStatus.message} />
+        )}
       </AnimatePresence>
     </div>
   );
@@ -455,14 +476,22 @@ export default function App() {
 interface ActionButtonProps {
   readonly server: McpServer;
   readonly dataSource: DataSource;
+  readonly isProcessing: boolean;
   readonly onToggle: () => void;
 }
 
-function ActionButton({ server, dataSource, onToggle }: ActionButtonProps) {
+function ActionButton({ server, dataSource, isProcessing, onToggle }: ActionButtonProps) {
   let className = "w-full py-3 rounded-lg text-xs font-bold tracking-wide transition-all duration-300 flex items-center justify-center gap-2 ";
   let content: ReactNode = null;
 
-  if (dataSource === 'community') {
+  if (isProcessing) {
+      className += "bg-white/5 text-white/20 cursor-wait border border-white/5";
+      content = (
+          <>
+            <span className="animate-pulse">PROCESSING...</span>
+          </>
+      );
+  } else if (dataSource === 'community') {
     className += "bg-white/10 text-white hover:bg-neon-cyan hover:text-black hover:shadow-[0_0_25px_-5px_rgba(34,211,238,0.6)] border border-white/10 hover:border-neon-cyan";
     content = (
       <>
@@ -491,8 +520,9 @@ function ActionButton({ server, dataSource, onToggle }: ActionButtonProps) {
     );
   }
 
+
   return (
-    <button onClick={onToggle} className={className}>
+    <button onClick={onToggle} disabled={isProcessing} className={className}>
       {content}
     </button>
   );
@@ -607,6 +637,7 @@ function ConfigModal({ server, onClose, onSubmit }: ConfigModalProps) {
                     </button>
                 </div>
 
+
                 <div className="p-6 space-y-6 overflow-y-auto custom-scrollbar">
                     {server.configSchema?.map(field => (
                         <div key={field.key} className="space-y-2 group">
@@ -663,6 +694,36 @@ function ConfigModal({ server, onClose, onSubmit }: ConfigModalProps) {
                         INITIALIZE SYSTEM
                     </button>
                 </div>
+            </motion.div>
+        </motion.div>
+    );
+}
+function LoaderModal({ message }: { message: string }) {
+    return (
+        <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+        >
+            <motion.div 
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                 className="bg-[#0D0D0D] border border-white/10 rounded-2xl w-full max-w-sm shadow-[0_0_50px_-10px_rgba(34,211,238,0.2)] p-8 flex flex-col items-center justify-center text-center"
+            >
+                <div className="relative mb-6">
+                     <div className="w-16 h-16 rounded-full border-4 border-white/10 border-t-neon-cyan animate-spin"></div>
+                     <div className="absolute inset-0 flex items-center justify-center">
+                         <div className="w-8 h-8 rounded-full bg-neon-cyan/20 animate-pulse"></div>
+                     </div>
+                </div>
+                
+                <h3 className="text-lg font-bold text-white mb-2 tracking-tight">Processing Request</h3>
+                <p className="text-neon-cyan font-mono text-xs animate-pulse">{message}</p>
+                <p className="text-text-muted text-[10px] mt-4 max-w-[200px] leading-relaxed">
+                    Please wait while the system handles your request. This may take a moment.
+                </p>
             </motion.div>
         </motion.div>
     );
