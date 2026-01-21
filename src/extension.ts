@@ -86,7 +86,7 @@ export function activate(context: vscode.ExtensionContext) {
 
         panel.webview.onDidReceiveMessage(
             async message => {
-                const runCmd = (command: string, cwd?: string): Promise<{ stdout: string, stderr: string }> => {
+                const runCmd = (command: string, cwd?: string, logCommand?: string): Promise<{ stdout: string, stderr: string }> => {
                     return new Promise((resolve, reject) => {
                         const isWindows = process.platform === 'win32';
                         // Ensure cwd exists if provided
@@ -98,7 +98,8 @@ export function activate(context: vscode.ExtensionContext) {
                             return;
                         }
 
-                        const logMsg = `Executing: ${command} in ${cwd || 'default cwd'}`;
+                        const displayCmd = logCommand || command;
+                        const logMsg = `Executing: ${displayCmd} in ${cwd || 'default cwd'}`;
                         console.log(logMsg);
                         outputChannel.appendLine(logMsg);
                         
@@ -253,14 +254,7 @@ export function activate(context: vscode.ExtensionContext) {
                             return;
                         }
 
-                        // Verify Git is available
-                        try {
-                            await runCmd('git --version');
-                        } catch (e) {
-                             vscode.window.showErrorMessage('Git is not available. Please install Git and reload VS Code.');
-                             panel.webview.postMessage({ command: 'operation_error', message: 'Git not found in PATH' });
-                             return;
-                        }
+
 
                         vscode.window.showInformationMessage(`Installing ${id}...`);
                         outputChannel.show(); // Show the output channel so user can see progress
@@ -275,8 +269,29 @@ export function activate(context: vscode.ExtensionContext) {
                         try {
                             // 1. Clone
                             if (!fs.existsSync(serverDir)) {
-                                outputChannel.appendLine(`Cloning ${repo} to ${serverDir}...`);
-                                await runCmd(`git clone ${repo} ${id}`, mcpDir);
+                                let cloneUrl = repo;
+                                let logUrl = repo;
+
+                                // Attempt to use VS Code Authentication for GitHub
+                                if (repo.includes('github.com')) {
+                                    try {
+                                        const session = await vscode.authentication.getSession('github', ['repo'], { createIfNone: false });
+                                        if (session) {
+                                            // Inject token into URL
+                                            // Format: https://x-access-token:TOKEN@github.com/owner/repo.git
+                                            const token = session.accessToken;
+                                            const repoPath = repo.replace('https://github.com/', '').replace('.git', '');
+                                            cloneUrl = `https://x-access-token:${token}@github.com/${repoPath}.git`;
+                                            logUrl = `https://github.com/${repoPath}.git (Authenticated)`;
+                                            outputChannel.appendLine(`Using GitHub authentication for ${repoPath}`);
+                                        }
+                                    } catch (e) {
+                                        console.warn('Failed to get GitHub session, falling back to public clone', e);
+                                    }
+                                }
+
+                                outputChannel.appendLine(`Cloning ${logUrl} to ${serverDir}...`);
+                                await runCmd(`git clone ${cloneUrl} ${id}`, mcpDir, `git clone ${logUrl} ${id}`);
                             } else {
                                 console.log('Directory exists, skipping clone');
                                 outputChannel.appendLine(`Directory ${serverDir} exists, skipping clone.`);
@@ -417,8 +432,17 @@ export function activate(context: vscode.ExtensionContext) {
                             outputChannel.appendLine(`[Error] Install failed: ${msg}`);
                             outputChannel.appendLine(`[Details] ${details}`);
                             
-                            vscode.window.showErrorMessage(`Installation failed: ${msg}. Check 'MCP Manager' output for details.`);
-                            panel.webview.postMessage({ command: 'operation_error', message: `Install failed: ${msg}\n${details}` });
+                            let userMessage = `Installation failed: ${msg}. Check 'MCP Manager' output for details.`;
+                            
+                            // Heuristic for missing Git
+                            if ((details.includes("'git'") && details.includes("not recognized")) || 
+                                msg.includes("spawn git ENOENT") || 
+                                details.includes("command not found")) {
+                                userMessage = "Git is required but was not detected. Please ensure Git is installed and available in your PATH.";
+                            }
+
+                            vscode.window.showErrorMessage(userMessage);
+                            panel.webview.postMessage({ command: 'operation_error', message: userMessage + `\n\nDetails: ${details}` });
                         }
                         return;
                 }
