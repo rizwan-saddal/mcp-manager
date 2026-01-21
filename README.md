@@ -78,7 +78,7 @@ Adding new tools is now fully automated.
    * Configure the environment.
    * Sync with the Agent.
 
-**(Manual JSON editing is no longer required.)**
+**Note:** Manual JSON editing is no longer required.
 
 ## 🤝 Contributing
 
@@ -86,4 +86,4 @@ Adding new tools is now fully automated.
 * **Publisher**: rizwan-saddal
 
 ---
-Powered by `uv` and Model Context Protocol
+Powered by `Craze for AI` and Model Context Protocol (and lots of love for coding)
