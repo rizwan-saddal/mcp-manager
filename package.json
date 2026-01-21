@@ -10,7 +10,7 @@
   },
   "icon": "assets/icon.png",
   "engines": {
-    "vscode": "^1.74.0"
+    "vscode": "^1.93.0"
   },
   "categories": [
     "Other"
@@ -58,7 +58,7 @@
     "@types/node": "^24.10.1",
     "@types/react": "^19.2.5",
     "@types/react-dom": "^19.2.3",
-    "@types/vscode": "^1.74.0",
+    "@types/vscode": "^1.93.0",
     "@vitejs/plugin-react": "^5.1.1",
     "@vscode/vsce": "^3.7.1",
     "autoprefixer": "^10.4.23",

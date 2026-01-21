@@ -56,6 +56,7 @@ export default function App() {
   const [logs, setLogs] = useState<Log[]>([
     { id: 'init', time: new Date().toLocaleTimeString(), message: 'Dashboard initialized', type: 'info' }
   ]);
+  const [dockerChecked, setDockerChecked] = useState(false);
 
   const addLog = (message: string, type: LogType = 'info') => {
     setLogs(prev => [{
@@ -78,15 +79,20 @@ export default function App() {
         const message = event.data;
         switch (message.command) {
             case 'docker_status':
+                setDockerChecked(true);
                 if (!message.available) {
                     setDataSource('community');
-                    addLog('Docker not found. Switching to Community Hub.', 'info');
+                    addLog('Docker command not found or inaccessible. Switching to Community Hub.', 'error');
                     globalThis.window.vscode.postMessage({ command: 'fetch_community_servers' });
+                } else {
+                    addLog('Docker Desktop integration verified.', 'success');
                 }
                 break;
             case 'servers_list':
                 setServers(message.data);
-                setLoading(false);
+                if (dockerChecked || dataSource === 'docker') {
+                    setLoading(false);
+                }
                 setError(null);
                 addLog(`Catalog updated: ${message.data.length} servers found`, 'success');
                 break;
@@ -101,6 +107,16 @@ export default function App() {
                 setLoading(false);
                 break;
             }
+            case 'server_added':
+                addLog(`Server enabled: ${message.serverId}`, 'success');
+                // Refresh server list to show enabled state
+                globalThis.window.vscode.postMessage({ command: 'list_servers' });
+                break;
+            case 'server_removed':
+                addLog(`Server disabled: ${message.serverId}`, 'info');
+                // Refresh server list
+                globalThis.window.vscode.postMessage({ command: 'list_servers' });
+                break;
             case 'server_cloned':
                 addLog(`Server cloned successfully: ${message.serverId}`, 'success');
                 break;
@@ -115,7 +131,7 @@ export default function App() {
 
     globalThis.window?.addEventListener('message', handler);
     return () => globalThis.window?.removeEventListener('message', handler);
-  }, []);
+  }, [dockerChecked, dataSource]);
 
   const [search, setSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');

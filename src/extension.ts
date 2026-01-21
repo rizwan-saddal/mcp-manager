@@ -24,7 +24,7 @@ export function activate(context: vscode.ExtensionContext) {
     const HOME = process.env.USERPROFILE || process.env.HOME || "";
     const configPaths = [
         path.join(HOME, ".docker", "mcp", "catalogs", "docker-mcp.yaml"),
-        path.join(HOME, ".docker", "mcp", "registry.yaml")
+        getMcpConfigPath()
     ];
 
     const changeListener = () => {
@@ -83,6 +83,35 @@ export function activate(context: vscode.ExtensionContext) {
 
         panel.webview.onDidReceiveMessage(
             async message => {
+                const runCmd = (command: string): Promise<{ stdout: string, stderr: string }> => {
+                    return new Promise((resolve, reject) => {
+                        const env = { ...process.env };
+                        // Ensure critical Windows environment variables are present to avoid ENOENT on cmd.exe
+                        if (process.platform === 'win32') {
+                            const systemRoot = env.SystemRoot || 'C:\\Windows';
+                            const system32 = path.join(systemRoot, 'System32');
+                            
+                            const paths = (env.Path || '').split(path.delimiter);
+                            if (!paths.some(p => p.toLowerCase() === system32.toLowerCase())) {
+                                paths.unshift(system32);
+                                env.Path = paths.join(path.delimiter);
+                            }
+                            
+                            if (!env.ComSpec) {
+                                env.ComSpec = path.join(system32, 'cmd.exe');
+                            }
+                        }
+
+                        cp.exec(command, { env }, (err, stdout, stderr) => {
+                            if (err) {
+                                reject({ err, stdout, stderr });
+                            } else {
+                                resolve({ stdout, stderr });
+                            }
+                        });
+                    });
+                };
+
                 switch (message.command) {
                     case 'list_servers':
                         try {
@@ -93,44 +122,76 @@ export function activate(context: vscode.ExtensionContext) {
                         } catch (err: any) {
                             const errorMsg = err.message || String(err);
                             console.error('Failed to list servers:', err);
-                            console.error('Error stack:', err.stack);
                             vscode.window.showErrorMessage('Failed to list servers: ' + errorMsg);
                             panel.webview.postMessage({ command: 'error', message: errorMsg });
                         }
                         return;
+
                     case 'add_server':
                         console.log(`Enabling server ${message.serverId}...`);
-                        cp.exec(`docker mcp server enable ${message.serverId}`, (err, stdout, stderr) => {
-                            if (err) {
-                                console.error(`Failed to enable ${message.serverId}:`, stderr);
-                                vscode.window.showErrorMessage(`Failed to enable ${message.serverId}: ${stderr || err.message}`);
-                                panel.webview.postMessage({ command: 'operation_error', message: `Failed to enable ${message.serverId}: ${stderr || err.message}` });
-                            } else {
-                                console.log(`Enabled ${message.serverId}`);
-                                vscode.window.showInformationMessage(`Enabled ${message.serverId}`);
-                                panel.webview.postMessage({ command: 'server_added', serverId: message.serverId });
+                        try {
+                            const configPath = getMcpConfigPath();
+                            const servers = listMcpServers();
+                            const server = servers.find(s => s.id === message.serverId);
+                            
+                            if (!server) throw new Error("Server not found in catalog");
+
+                            let config: any = { mcpServers: {} };
+                            if (fs.existsSync(configPath)) {
+                                config = JSON.parse(fs.readFileSync(configPath, "utf8"));
                             }
-                        });
+                            if (!config.mcpServers) config.mcpServers = {};
+
+                            config.mcpServers[message.serverId] = {
+                                command: "docker",
+                                args: ["run", "-i", "--rm", server.image]
+                            };
+
+                            // Ensure directory exists
+                            fs.mkdirSync(path.dirname(configPath), { recursive: true });
+                            fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+
+                            console.log(`Enabled ${message.serverId} via JSON config`);
+                            vscode.window.showInformationMessage(`Enabled ${message.serverId}`);
+                            panel.webview.postMessage({ command: 'server_added', serverId: message.serverId });
+                        } catch (e: any) {
+                            console.error(`Failed to enable ${message.serverId}:`, e.message);
+                            vscode.window.showErrorMessage(`Failed to enable ${message.serverId}: ${e.message}`);
+                            panel.webview.postMessage({ command: 'operation_error', message: `Failed to initialize ${message.serverId}: ${e.message}` });
+                        }
                         return;
+
                     case 'remove_server':
                         console.log(`Disabling server ${message.serverId}...`);
-                        cp.exec(`docker mcp server disable ${message.serverId}`, (err, stdout, stderr) => {
-                            if (err) {
-                                console.error(`Failed to disable ${message.serverId}:`, stderr);
-                                vscode.window.showErrorMessage(`Failed to disable ${message.serverId}: ${stderr || err.message}`);
-                                panel.webview.postMessage({ command: 'operation_error', message: `Failed to disable ${message.serverId}: ${stderr || err.message}` });
-                            } else {
-                                console.log(`Disabled ${message.serverId}`);
-                                vscode.window.showInformationMessage(`Disabled ${message.serverId}`);
-                                panel.webview.postMessage({ command: 'server_removed', serverId: message.serverId });
+                        try {
+                            const configPath = getMcpConfigPath();
+                            if (fs.existsSync(configPath)) {
+                                const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
+                                if (config.mcpServers && config.mcpServers[message.serverId]) {
+                                    delete config.mcpServers[message.serverId];
+                                    fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+                                }
                             }
-                        });
+                            console.log(`Disabled ${message.serverId}`);
+                            vscode.window.showInformationMessage(`Disabled ${message.serverId}`);
+                            panel.webview.postMessage({ command: 'server_removed', serverId: message.serverId });
+                        } catch (e: any) {
+                            console.error(`Failed to disable ${message.serverId}:`, e.message);
+                            vscode.window.showErrorMessage(`Failed to disable ${message.serverId}: ${e.message}`);
+                            panel.webview.postMessage({ command: 'operation_error', message: `Failed to stop ${message.serverId}: ${e.message}` });
+                        }
                         return;
+
+
                     case 'check_docker':
-                        cp.exec('docker --version', (err) => {
-                           panel.webview.postMessage({ command: 'docker_status', available: !err });
-                        });
+                        try {
+                            await runCmd('docker --version');
+                            panel.webview.postMessage({ command: 'docker_status', available: true });
+                        } catch (e) {
+                            panel.webview.postMessage({ command: 'docker_status', available: false });
+                        }
                         return;
+
                     case 'fetch_community_servers':
                         try {
                             console.log('Fetching community servers from GitHub...');
@@ -162,29 +223,24 @@ export function activate(context: vscode.ExtensionContext) {
 
                         vscode.window.showInformationMessage(`Cloning ${id} server...`);
                         
-                        // We use sparse checkout if it's a monorepo, or full clone.
-                        // Simplified for now: Full clone into a temp dir then move? 
-                        // Actually, let's just do a specific "git clone" if the user wants.
-                        // Since 'servers' is a monorepo, we'll suggest cloning the whole thing or just point them to it.
-                        // For this MVP, we will clone the MAIN monorepo into 'mcp-servers/community' if not present.
-                        
                         const mcpDir = path.join(workspaceFolder, 'mcp-servers');
                         if (!fs.existsSync(mcpDir)) {
                             fs.mkdirSync(mcpDir);
                         }
 
-                        cp.exec(`git clone ${repo} ${path.join(mcpDir, id)}`, (err, stdout, stderr) => {
-                             if (err) {
-                                vscode.window.showErrorMessage(`Failed to clone: ${err.message}`);
-                                panel.webview.postMessage({ command: 'operation_error', message: `Clone failed: ${err.message}` });
-                             } else {
-                                vscode.window.showInformationMessage(`Successfully cloned ${id}`);
-                                panel.webview.postMessage({ command: 'server_cloned', serverId: id });
-                             }
-                        });
+                        try {
+                            await runCmd(`git clone ${repo} ${path.join(mcpDir, id)}`);
+                            vscode.window.showInformationMessage(`Successfully cloned ${id}`);
+                            panel.webview.postMessage({ command: 'server_cloned', serverId: id });
+                        } catch (e: any) {
+                            const msg = e.err?.message || String(e);
+                            vscode.window.showErrorMessage(`Failed to clone: ${msg}`);
+                            panel.webview.postMessage({ command: 'operation_error', message: `Clone failed: ${msg}` });
+                        }
                         return;
                 }
             },
+
             undefined,
             context.subscriptions
         );
@@ -192,48 +248,203 @@ export function activate(context: vscode.ExtensionContext) {
 
 
     context.subscriptions.push(disposable);
+
+    // Register MCP tools as VS Code Language Model Tools
+    registerMcpTools(context);
+}
+
+async function registerMcpTools(context: vscode.ExtensionContext) {
+    try {
+        const configPath = getMcpConfigPath();
+        if (!fs.existsSync(configPath)) return;
+
+        const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
+        const servers = config.mcpServers || {};
+
+        for (const [serverId, serverConfig] of Object.entries(servers)) {
+            if (serverId === 'brave') {
+                registerBraveTools(context, serverConfig as any);
+            } else if (serverId === 'fetch') {
+                registerFetchTools(context, serverConfig as any);
+            }
+        }
+    } catch (e) {
+        console.error('Failed to register MCP tools:', e);
+    }
+}
+
+function registerBraveTools(context: vscode.ExtensionContext, config: any) {
+    const tools = [
+        {
+            name: 'brave_search',
+            description: 'Search the web using Brave Search. Best for current events and general information.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    query: { type: 'string', description: 'The search query' },
+                    count: { type: 'number', description: 'Number of results (1-10)', default: 5 }
+                },
+                required: ['query']
+            }
+        },
+        {
+            name: 'brave_local_search',
+            description: 'Search for local businesses, points of interest, and places.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    query: { type: 'string', description: 'The search query' }
+                },
+                required: ['query']
+            }
+        }
+    ];
+
+    for (const tool of tools) {
+        const toolId = `mcp-brave-${tool.name}`;
+        context.subscriptions.push(
+            vscode.lm.registerTool(toolId, {
+                async invoke(options, token) {
+                    const result = await runMcpToolCall(config, tool.name, options.input);
+                    return new vscode.LanguageModelToolResult([new vscode.LanguageModelToolResultPart(result)]);
+                }
+            })
+        );
+        console.log(`Registered VS Code tool: ${toolId}`);
+    }
+}
+
+function registerFetchTools(context: vscode.ExtensionContext, config: any) {
+    const tools = [
+        {
+            name: 'fetch',
+            description: 'Fetches a URL from the internet and extracts its contents as markdown.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    url: { type: 'string', description: 'URL to fetch' },
+                    max_length: { type: 'number', description: 'Maximum number of characters to return' },
+                    raw: { type: 'boolean', description: 'Get the actual HTML content without simplification' },
+                    start_index: { type: 'number', description: 'Start output at this character index' }
+                },
+                required: ['url']
+            }
+        }
+    ];
+
+    for (const tool of tools) {
+        const toolId = `mcp-fetch-${tool.name}`;
+        context.subscriptions.push(
+            vscode.lm.registerTool(toolId, {
+                async invoke(options, token) {
+                    const result = await runMcpToolCall(config, tool.name, options.input);
+                    return new vscode.LanguageModelToolResult([new vscode.LanguageModelToolResultPart(result)]);
+                }
+            })
+        );
+        console.log(`Registered VS Code tool: ${toolId}`);
+    }
+}
+
+async function runMcpToolCall(config: any, toolName: string, args: any): Promise<string> {
+    return new Promise((resolve, reject) => {
+        // Construct the docker command but run it in a way that we can talk to it
+        // We'll use a one-shot execution for now, but real MCP typically uses stdio persistence
+        const dockerArgs = [...(config.args || [])];
+        
+        // We need to send a JSON-RPC request to stdin
+        const request = {
+            jsonrpc: "2.0",
+            id: 1,
+            method: "tools/call",
+            params: {
+                name: toolName,
+                arguments: args
+            }
+        };
+
+        const cp_proc = cp.spawn(config.command, dockerArgs, {
+            env: process.env,
+            shell: true
+        });
+
+        let stdout = '';
+        let stderr = '';
+
+        cp_proc.stdout.on('data', (data) => {
+            stdout += data.toString();
+        });
+
+        cp_proc.stderr.on('data', (data) => {
+            stderr += data.toString();
+        });
+
+        cp_proc.on('close', (code) => {
+            try {
+                // Find the JSON response in stdout (might be multiple lines or contain noise)
+                const match = stdout.match(/\{.*\}/s);
+                if (match) {
+                    const response = JSON.parse(match[0]);
+                    if (response.result && response.result.content) {
+                        const content = response.result.content
+                            .map((c: any) => c.text || JSON.stringify(c))
+                            .join('\n');
+                        resolve(content);
+                    } else if (response.error) {
+                        reject(new Error(response.error.message || 'MCP Error'));
+                    } else {
+                        resolve(stdout);
+                    }
+                } else {
+                    resolve(stdout || stderr || 'No output from tool');
+                }
+            } catch (err) {
+                resolve(stdout || 'Failed to parse MCP response');
+            }
+        });
+
+        // Write the request to stdin and close it
+        cp_proc.stdin.write(JSON.stringify(request) + '\n');
+        cp_proc.stdin.end();
+
+        // Timeout after 30 seconds
+        setTimeout(() => {
+            cp_proc.kill();
+            reject(new Error('MCP tool call timed out'));
+        }, 30000);
+    });
+}
+
+function getMcpConfigPath() {
+    const HOME = process.env.USERPROFILE || process.env.HOME || "";
+    // We'll manage a standard config file that the user can point their MCP clients to
+    return path.join(HOME, ".docker", "mcp", "mcp-manager-config.json");
 }
 
 function listMcpServers() {
     try {
         const HOME = process.env.USERPROFILE || process.env.HOME || "";
-        console.log('HOME directory:', HOME);
-        
         const CATALOG_PATH = path.join(HOME, ".docker", "mcp", "catalogs", "docker-mcp.yaml");
-        console.log('Catalog path:', CATALOG_PATH);
         
         if (!fs.existsSync(CATALOG_PATH)) {
-            throw new Error('Catalog not found at ' + CATALOG_PATH);
+            throw new Error('Docker MCP Catalog not found. Please ensure Docker Desktop has MCP features enabled (Beta).');
         }
 
-        console.log('Reading catalog file...');
         const fileContents = fs.readFileSync(CATALOG_PATH, "utf8");
-        console.log('Catalog file size:', fileContents.length, 'bytes');
-        
-        console.log('Parsing YAML...');
         const data = yaml.load(fileContents) as any;
         
         if (!data?.registry) {
-            throw new Error("Invalid catalog format: missing registry field");
+            throw new Error("Invalid catalog format");
         }
 
-        console.log('Registry entries:', Object.keys(data.registry).length);
-
-        // Get enabled servers from registry.yaml
-        const REGISTRY_PATH = path.join(HOME, ".docker", "mcp", "registry.yaml");
-        console.log('Registry path:', REGISTRY_PATH);
-        
+        // Get enabled servers from our managed config
+        const CONFIG_PATH = getMcpConfigPath();
         let enabledServers: string[] = [];
-        if (fs.existsSync(REGISTRY_PATH)) {
-            console.log('Reading registry file...');
-            const registryContent = fs.readFileSync(REGISTRY_PATH, "utf8");
-            const registryData = yaml.load(registryContent) as any;
-            if (registryData?.registry) {
-                enabledServers = Object.keys(registryData.registry);
-                console.log('Enabled servers:', enabledServers.length);
+        if (fs.existsSync(CONFIG_PATH)) {
+            const config = JSON.parse(fs.readFileSync(CONFIG_PATH, "utf8"));
+            if (config.mcpServers) {
+                enabledServers = Object.keys(config.mcpServers);
             }
-        } else {
-            console.log('Registry file not found, no servers enabled');
         }
 
         const servers = Object.entries(data.registry).map(([id, info]: [string, any]) => ({
@@ -246,14 +457,13 @@ function listMcpServers() {
             enabled: enabledServers.includes(id)
         }));
 
-        console.log('Returning', servers.length, 'servers');
         return servers;
     } catch (error: any) {
         console.error('Error in listMcpServers:', error);
-        console.error('Error stack:', error.stack);
         throw error;
     }
 }
+
 
 function getWebviewContent(webview: vscode.Webview, extensionUri: vscode.Uri) {
     const manifestPath = path.join(extensionUri.fsPath, 'dist', '.vite', 'manifest.json');
