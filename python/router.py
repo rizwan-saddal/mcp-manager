@@ -7,6 +7,8 @@ import json
 import os
 import sys
 import time
+import hashlib
+import shutil
 from typing import Any, Dict, List, Optional
 from dataclasses import dataclass
 
@@ -17,6 +19,7 @@ if not os.path.exists(LOGS_DIR):
     os.makedirs(LOGS_DIR, exist_ok=True)
 LOG_FILE = os.path.join(LOGS_DIR, "usage.jsonl")
 MANIFEST_PATH = os.path.join(REPO_ROOT, "router_manifest.json")
+COMMUNITY_PATH = os.path.join(os.path.dirname(__file__), "community_servers.json")
 
 # Import MCP
 try:
@@ -43,23 +46,77 @@ class ActiveServer:
 # Map command_hash -> ActiveServer
 active_servers: Dict[str, ActiveServer] = {}
 
-def get_command_hash(command: List[str]) -> str:
-    return json.dumps(command)
+def get_command_hash(command: List[str], env: Dict[str, str]) -> str:
+    # Include env in hash to ensure config changes trigger new servers
+    data = json.dumps({"cmd": command, "env": env}, sort_keys=True)
+    return hashlib.sha256(data.encode()).hexdigest()
 
 def load_manifest() -> Dict:
-    if not os.path.exists(MANIFEST_PATH):
-        return {"tools": []}
-    try:
-        with open(MANIFEST_PATH, "r") as f:
-            return json.load(f)
-    except Exception as e:
-        sys.stderr.write(f"Error loading manifest: {e}\n")
-        return {"tools": []}
+    manifest = {"tools": []}
+    
+    # 1. Load User Manifest (Priority)
+    if os.path.exists(MANIFEST_PATH):
+        try:
+            with open(MANIFEST_PATH, "r") as f:
+                user_manifest = json.load(f)
+                manifest["tools"].extend(user_manifest.get("tools", []))
+        except Exception as e:
+            sys.stderr.write(f"Error loading user manifest: {e}\n")
+
+    # 2. Load Community Registry (Auto-Discovery)
+    if os.path.exists(COMMUNITY_PATH):
+        try:
+            with open(COMMUNITY_PATH, "r") as f:
+                community_manifest = json.load(f)
+                # Only add if not already present by name
+                existing_names = set(t["name"] for t in manifest["tools"])
+                for tool in community_manifest.get("tools", []):
+                    if tool["name"] not in existing_names:
+                        manifest["tools"].append(tool)
+        except Exception as e:
+            sys.stderr.write(f"Error loading community registry: {e}\n")
+            
+    return manifest
+
+def expand_vars(text: str) -> str:
+    """Expand environment variables in format ${VAR} or $VAR"""
+    return os.path.expandvars(text)
 
 @server.list_tools()
 async def list_tools() -> List[types.Tool]:
     manifest = load_manifest()
     tools = []
+    
+    # Add Router Internal Tools
+    tools.append(types.Tool(
+        name="configure_mcp_tool",
+        description="Configure environment variables for an MCP tool. Use this to save API keys (e.g. BRAVE_API_KEY).",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "Name of the tool (e.g. brave_search)"},
+                "env": {
+                    "type": "object", 
+                    "additionalProperties": {"type": "string"},
+                    "description": "Key-value pairs of environment variables to set"
+                }
+            },
+            "required": ["name", "env"]
+        }
+    ))
+    
+    tools.append(types.Tool(
+        name="search_mcp_servers",
+        description="CRITICAL: Use this tool whenever you lack the necessary tools, skills, or knowledge to complete a user request. It searches the expanded MCP registry to find and install new capabilities (e.g. 'browser', 'database', 'slack') on the fly.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Search query for the missing capability (e.g. 'weather', 'database', 'browser')"}
+            },
+            "required": ["query"]
+        }
+    ))
+
     for tool_def in manifest.get("tools", []):
          # If strict, we might need to conform to types.Tool inputSchema structure
          # For now, pass through
@@ -74,6 +131,74 @@ async def list_tools() -> List[types.Tool]:
 
 @server.call_tool()
 async def call_tool(name: str, arguments: dict) -> List[types.TextContent | types.ImageContent | types.EmbeddedResource]:
+    # Handle Internal Tools
+    if name == "configure_mcp_tool":
+        try:
+            tool_name = arguments["name"]
+            new_env = arguments["env"]
+            
+            # 1. Load User Manifest (or create empty)
+            user_manifest = {"tools": []}
+            if os.path.exists(MANIFEST_PATH):
+                try:
+                    with open(MANIFEST_PATH, "r") as f:
+                        user_manifest = json.load(f)
+                except:
+                    pass
+            
+            # 2. Find tool in User Manifest, or copy from Community
+            tool_entry = next((t for t in user_manifest["tools"] if t["name"] == tool_name), None)
+            
+            if not tool_entry:
+                # Look in Community
+                if os.path.exists(COMMUNITY_PATH):
+                    with open(COMMUNITY_PATH, "r") as f:
+                        community = json.load(f)
+                        comm_tool = next((t for t in community["tools"] if t["name"] == tool_name), None)
+                        if comm_tool:
+                            # Copy to User Manifest
+                            tool_entry = comm_tool.copy()
+                            user_manifest["tools"].append(tool_entry)
+            
+            if not tool_entry:
+                return [types.TextContent(type="text", text=f"Error: Tool '{tool_name}' not found in registry.")]
+            
+            # 3. Update Env
+            if "env" not in tool_entry:
+                tool_entry["env"] = {}
+            tool_entry["env"].update(new_env)
+            
+            # 4. Save
+            with open(MANIFEST_PATH, "w") as f:
+                json.dump(user_manifest, f, indent=2)
+                
+            return [types.TextContent(type="text", text=f"Successfully configured and saved settings for '{tool_name}'.")]
+            
+        except Exception as e:
+            return [types.TextContent(type="text", text=f"Error configuring tool: {e}")]
+
+    if name == "search_mcp_servers":
+        try:
+            query = arguments["query"].lower()
+            results = []
+            
+            # Load Registry
+            if os.path.exists(COMMUNITY_PATH):
+                with open(COMMUNITY_PATH, "r") as f:
+                    community = json.load(f)
+                    for tool in community.get("tools", []):
+                        if query in tool["name"].lower() or query in tool.get("description", "").lower():
+                            results.append({
+                                "name": tool["name"],
+                                "description": tool.get("description", ""),
+                                "command_preview": " ".join(tool["command"])
+                            })
+            
+            return [types.TextContent(type="text", text=json.dumps(results, indent=2))]
+        except Exception as e:
+            return [types.TextContent(type="text", text=f"Error searching registry: {e}")]
+
+
     manifest = load_manifest()
     tool_def = next((t for t in manifest.get("tools", []) if t["name"] == name), None)
     
@@ -85,22 +210,36 @@ async def call_tool(name: str, arguments: dict) -> List[types.TextContent | type
         return [types.TextContent(type="text", text=f"Tool {name} not found")]
 
     command = tool_def["command"]
-    cmd_hash = get_command_hash(command)
     
-    # Resolve absolute paths in command
+    # Resolve absolute paths and expand variables in command
     final_cmd = []
-    for part in command:
-        possible_path = os.path.join(REPO_ROOT, part)
+    for i, part in enumerate(command):
+        # Expand vars first (e.g. ${DB_PATH})
+        expanded_part = expand_vars(part)
+        
+        # Check for absolute paths relative to repo root
+        possible_path = os.path.join(REPO_ROOT, expanded_part)
         if os.path.exists(possible_path):
              final_cmd.append(possible_path)
         else:
-             final_cmd.append(part)
-
+             # Logic for executable resolution (first arg)
+             if i == 0 and not os.path.isabs(expanded_part):
+                 resolved = shutil.which(expanded_part)
+                 if resolved:
+                     final_cmd.append(resolved)
+                 else:
+                     final_cmd.append(expanded_part)
+             else:
+                 final_cmd.append(expanded_part)
+    
     # ENV preparation
     env = os.environ.copy()
     if tool_def.get("env"):
         env.update(tool_def["env"])
     env["PYTHONUNBUFFERED"] = "1"
+    
+    # Calculate hash including env
+    cmd_hash = get_command_hash(final_cmd, env)
 
     try:
         session = None

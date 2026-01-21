@@ -58,15 +58,8 @@ export class UvManager {
         // Use curl or powershell to download and extract
         if (platform === 'win32') {
             const zipPath = path.join(destDir, 'uv.zip');
-            // Use execFile to avoid spawning cmd.exe
-            // Determine available shell (pwsh or powershell)
-            let shell = 'powershell';
-            try {
-                await execFile('pwsh', ['-version']);
-                shell = 'pwsh';
-            } catch (e) {
-                // pwsh not found, fallback to powershell
-            }
+            // Determine (and verify) available shell
+            const shell = await this.findPowerShell();
 
             const script = `& { Invoke-WebRequest -Uri '${url}' -OutFile '${zipPath}'; Expand-Archive -Path '${zipPath}' -DestinationPath '${destDir}' -Force; }`;
             await execFile(shell, ['-NoProfile', '-Command', script]);
@@ -98,6 +91,41 @@ export class UvManager {
         if (uvBinary && uvBinary !== path.join(destDir, platform === 'win32' ? 'uv.exe' : 'uv')) {
             fs.copyFileSync(uvBinary, path.join(destDir, platform === 'win32' ? 'uv.exe' : 'uv'));
         }
+    }
+
+    private static async findPowerShell(): Promise<string> {
+        // 1. Try pwsh (PowerShell Core)
+        try {
+            await execFile('pwsh', ['-version']);
+            return 'pwsh';
+        } catch (e) {
+            // Ignore
+        }
+
+        // 2. Try powershell (Windows PowerShell in PATH)
+        try {
+            await execFile('powershell', ['-version']);
+            return 'powershell';
+        } catch (e) {
+            // Ignore
+        }
+
+        // 3. Try absolute path to Windows PowerShell
+        const systemRoot = process.env.SystemRoot || process.env.windir || 'C:\\Windows';
+        const system32Path = path.join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
+        
+        // 4. Try SysWOW64 path (for 32-bit VS Code on 64-bit OS)
+        const sysWow64Path = path.join(systemRoot, 'SysWOW64', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
+
+        if (fs.existsSync(system32Path)) {
+            return system32Path;
+        }
+        
+        if (fs.existsSync(sysWow64Path)) {
+            return sysWow64Path;
+        }
+
+        throw new Error("PowerShell not found. Please ensure PowerShell is installed and available.");
     }
 
     private static getAllFiles(dirPath: string, arrayOfFiles: string[] = []) {
