@@ -1,71 +1,54 @@
 {
   "name": "mcp-manager",
-  "displayName": "Docker MCP Manager",
-  "description": "Eliminate CLI fatigue. Visually manage, search, and deploy 300+ Docker MCP servers with a premium, searchable dashboard.",
-  "version": "1.0.0",
-  "publisher": "rizwan-saddal",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/rizwan-saddal/mcp-manager"
-  },
-  "icon": "assets/icon.png",
+  "displayName": "MCP Manager",
+  "description": "Lazy Loading Router for MCP tools using uv",
+  "version": "0.0.1",
   "engines": {
-    "vscode": "^1.93.0"
+    "vscode": "^1.90.0"
   },
   "categories": [
     "Other"
   ],
-  "main": "./out/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./dist/extension.js",
   "contributes": {
     "commands": [
       {
-        "command": "mcp-manager.openDashboard",
-        "title": "MCP: Open Manager Dashboard"
+        "command": "mcp-manager.syncConfig",
+        "title": "MCP: Sync Configuration"
       }
-    ]
+    ],
+    "configuration": {
+      "type": "object",
+      "title": "MCP Manager",
+      "properties": {
+        "mcp-manager.pythonPath": {
+          "type": "string",
+          "default": "python",
+          "description": "Path to the Python interpreter to use for uv."
+        }
+      }
+    }
   },
-  "extensionDependencies": [
-    "ms-azuretools.vscode-docker"
-  ],
   "scripts": {
-    "vscode:prepublish": "npm run build",
+    "vscode:prepublish": "npm run package",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
-    "pretest": "npm run compile && npm run lint",
-    "lint": "eslint src",
-    "test": "node ./out/test/runTest.js",
-    "dev": "vite",
-    "build": "vite build && esbuild src/extension.ts --bundle --outfile=out/extension.js --external:vscode --platform=node --format=cjs",
     "package": "vsce package",
-    "preview": "vite preview"
-  },
-  "dependencies": {
-    "@tailwindcss/vite": "^4.1.18",
-    "@types/adm-zip": "^0.5.7",
-    "adm-zip": "^0.5.16",
-    "clsx": "^2.1.1",
-    "framer-motion": "^12.26.2",
-    "js-yaml": "^4.1.0",
-    "lucide-react": "^0.562.0",
-    "react": "^19.2.0",
-    "react-dom": "^19.2.0",
-    "tailwind-merge": "^3.4.0"
+    "test-compile": "tsc -p ./"
   },
   "devDependencies": {
-    "@eslint/js": "^9.39.1",
-    "@types/js-yaml": "^4.0.9",
-    "@types/node": "^24.10.1",
-    "@types/react": "^19.2.5",
-    "@types/react-dom": "^19.2.3",
-    "@types/vscode": "^1.93.0",
-    "@vitejs/plugin-react": "^5.1.1",
-    "@vscode/vsce": "^3.7.1",
-    "autoprefixer": "^10.4.23",
-    "esbuild": "^0.27.2",
-    "eslint": "^9.39.1",
-    "postcss": "^8.5.6",
-    "tailwindcss": "^4.1.18",
-    "typescript": "~5.9.3",
-    "vite": "^7.2.4"
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.90.0",
+    "@typescript-eslint/eslint-plugin": "^7.1.0",
+    "@typescript-eslint/parser": "^7.1.0",
+    "eslint": "^8.56.0",
+    "typescript": "^5.3.3",
+    "vsce": "^2.15.0"
+  },
+  "dependencies": {
+    "node-fetch": "^3.3.2"
   }
 }

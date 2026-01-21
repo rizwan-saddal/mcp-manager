@@ -1,0 +1,16 @@
+{
+  "tools": [
+    {
+      "name": "fetch_proxy_tool",
+      "description": "Imported from fetch. PLEASE UPDATE manually with specific tool names and input schemas.",
+      "command": [
+        "docker",
+        "run",
+        "-i",
+        "--rm",
+        "mcp/fetch"
+      ],
+      "inputSchema": {}
+    }
+  ]
+}
