@@ -27,6 +27,10 @@
       {
         "command": "mcp-manager.showStatus",
         "title": "MCP: Show Status"
+      },
+      {
+        "command": "mcp-manager.addTool",
+        "title": "MCP: Add Tool"
       }
     ],
     "configuration": {

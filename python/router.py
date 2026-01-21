@@ -6,30 +6,45 @@ import asyncio
 import json
 import os
 import sys
+import time
 from typing import Any, Dict, List, Optional
-import subprocess
+from dataclasses import dataclass
 
-# Determine the absolute path to the repository root
+# Determine paths
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 LOGS_DIR = os.path.join(REPO_ROOT, "logs")
 if not os.path.exists(LOGS_DIR):
     os.makedirs(LOGS_DIR, exist_ok=True)
 LOG_FILE = os.path.join(LOGS_DIR, "usage.jsonl")
+MANIFEST_PATH = os.path.join(REPO_ROOT, "router_manifest.json")
 
-# Ensure mcp is installed or available
+# Import MCP
 try:
     from mcp.server import Server
     from mcp.types import Tool, TextContent, ImageContent, EmbeddedResource
     import mcp.types as types
     from mcp.server.stdio import stdio_server
+    from mcp.client.stdio import stdio_client, StdioServerParameters
+    from mcp.client.session import ClientSession
 except ImportError:
-    # Fallback or error if deps are missing (should be installed via requirements.txt)
-    sys.stderr.write("Error: mcp package not found. Install requirements.txt.\n")
+    sys.stderr.write("Error: mcp package not found.\n")
     sys.exit(1)
 
 server = Server("mcp-manager-router")
 
-MANIFEST_PATH = os.path.join(REPO_ROOT, "router_manifest.json")
+@dataclass
+class ActiveServer:
+    process: Any
+    session: ClientSession
+    command_hash: str
+    exit_stack: Any
+
+# Global state for active downstream servers
+# Map command_hash -> ActiveServer
+active_servers: Dict[str, ActiveServer] = {}
+
+def get_command_hash(command: List[str]) -> str:
+    return json.dumps(command)
 
 def load_manifest() -> Dict:
     if not os.path.exists(MANIFEST_PATH):
@@ -46,6 +61,8 @@ async def list_tools() -> List[types.Tool]:
     manifest = load_manifest()
     tools = []
     for tool_def in manifest.get("tools", []):
+         # If strict, we might need to conform to types.Tool inputSchema structure
+         # For now, pass through
         tools.append(
             types.Tool(
                 name=tool_def["name"],
@@ -60,63 +77,82 @@ async def call_tool(name: str, arguments: dict) -> List[types.TextContent | type
     manifest = load_manifest()
     tool_def = next((t for t in manifest.get("tools", []) if t["name"] == name), None)
     
-    if not tool_def:
-        raise ValueError(f"Tool {name} not found")
-
-    command_template = tool_def["command"] # e.g. ["uv", "run", "python/simple_tool.py"]
-    
-    # Prepare environment
-    env = os.environ.copy()
-    env["MCP_ARGUMENTS"] = json.dumps(arguments)
-    env["PYTHONUNBUFFERED"] = "1"
-
-    # Construct command with absolute paths where necessary
-    cmd_list = []
-    for part in command_template:
-        # Check if part looks like a file in the repo and make it absolute
-        possible_path = os.path.join(REPO_ROOT, part)
-        if os.path.exists(possible_path):
-             cmd_list.append(possible_path)
-        else:
-             cmd_list.append(part)
-
-    import time
     start_time = time.time()
     success = False
     error_msg = None
+
+    if not tool_def:
+        return [types.TextContent(type="text", text=f"Tool {name} not found")]
+
+    command = tool_def["command"]
+    cmd_hash = get_command_hash(command)
     
+    # Resolve absolute paths in command
+    final_cmd = []
+    for part in command:
+        possible_path = os.path.join(REPO_ROOT, part)
+        if os.path.exists(possible_path):
+             final_cmd.append(possible_path)
+        else:
+             final_cmd.append(part)
+
+    # ENV preparation
+    env = os.environ.copy()
+    if tool_def.get("env"):
+        env.update(tool_def["env"])
+    env["PYTHONUNBUFFERED"] = "1"
+
     try:
-        process = await asyncio.create_subprocess_exec(
-            *cmd_list,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            env=env
-        )
+        session = None
         
-        stdout, stderr = await process.communicate()
+        # 1. Check if server is already running
+        if cmd_hash in active_servers:
+            session = active_servers[cmd_hash].session
+        else:
+            # 2. Start new server
+            # We use mcp.client.stdio to manage the connection
+            # We need to manually manage the exit stack context to keep it alive
+            from contextlib import AsyncExitStack
+            stack = AsyncExitStack()
+            
+            # Create params
+            server_params = StdioServerParameters(
+                command=final_cmd[0],
+                args=final_cmd[1:],
+                env=env
+            )
+            
+            # Connect
+            read, write = await stack.enter_async_context(stdio_client(server_params))
+            session = await stack.enter_async_context(ClientSession(read, write))
+            await session.initialize()
+            
+            # Store
+            active_servers[cmd_hash] = ActiveServer(
+                process=None, # stdio_client manages process internally or we don't access it easily, but session is what matters
+                session=session,
+                command_hash=cmd_hash,
+                exit_stack=stack
+            )
+
+        # 3. Call Tool via JSON-RPC
+        # We assume the downstream server exposes the tool with the SAME Name.
+        # If the manifest name is just an alias, we should fail or have a mapping.
+        # For now, we assume direct mapping.
+        result = await session.call_tool(name, arguments)
         
-        output_text = stdout.decode().strip()
-        error_text = stderr.decode().strip()
-
-        if process.returncode != 0:
-             # Include stderr in the output for debugging
-             error_msg = error_text
-             success = False
-             return [types.TextContent(type="text", text=f"Error executing tool {name}:\n{error_text}\nOutput:\n{output_text}")]
-
         success = True
-        # If strict output format is needed, we could parse JSON here. For now return raw stdout.
-        return [types.TextContent(type="text", text=output_text if output_text else "Success (No Output)")]
+        return result.content
 
     except Exception as e:
         error_msg = str(e)
-        success = False
-        return [types.TextContent(type="text", text=f"Exception running tool: {str(e)}")]
+        return [types.TextContent(type="text", text=f"Error calling tool {name}: {e}")]
+
     finally:
         duration = time.time() - start_time
         try:
             log_entry = {
-                "timestamp": time.time(), # Unix timestamp
+                "timestamp": time.time(),
                 "iso_time": time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime()),
                 "tool": name,
                 "success": success,
@@ -126,10 +162,9 @@ async def call_tool(name: str, arguments: dict) -> List[types.TextContent | type
             with open(LOG_FILE, "a", encoding="utf-8") as f:
                 f.write(json.dumps(log_entry) + "\n")
         except:
-            pass # Don't fail tool execution if logging fails
+            pass
 
 async def main():
-    # Run the server on stdio
     async with stdio_server() as (read, write):
         await server.run(read, write, server.create_initialization_options())
 

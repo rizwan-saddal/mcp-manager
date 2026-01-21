@@ -3,6 +3,7 @@ import * as path from 'path';
 import { UvManager } from './uvManager';
 import { ConfigSync } from './configSync';
 import { DashboardGenerator } from './dashboard';
+import { ToolManager } from './toolManager';
 
 export async function activate(context: vscode.ExtensionContext) {
     console.log('Activating MCP Manager Extension...');
@@ -42,6 +43,11 @@ export async function activate(context: vscode.ExtensionContext) {
         } catch (e) {
             vscode.window.showErrorMessage(`Failed to load dashboard: ${e}`);
         }
+    }));
+
+    // Command to Add Tool
+    context.subscriptions.push(vscode.commands.registerCommand('mcp-manager.addTool', async () => {
+        await ToolManager.addTool(context);
     }));
 
     // 1. Ensure uv is available
