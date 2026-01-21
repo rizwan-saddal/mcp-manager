@@ -14,12 +14,14 @@ interface ParsedServer {
     subpath?: string;
     category: string;
     iconUrl?: string;
+    configSchema?: any;
 }
 
 export function activate(context: vscode.ExtensionContext) {
     console.log('MCP Manager extension is active');
 
     let currentPanel: vscode.WebviewPanel | undefined = undefined;
+    const outputChannel = vscode.window.createOutputChannel("MCP Manager");
 
     // Watch for changes in Docker config files to support dynamic updates
     const HOME = process.env.USERPROFILE || process.env.HOME || "";
@@ -86,28 +88,56 @@ export function activate(context: vscode.ExtensionContext) {
             async message => {
                 const runCmd = (command: string, cwd?: string): Promise<{ stdout: string, stderr: string }> => {
                     return new Promise((resolve, reject) => {
-                        console.log(`Executing: ${command} in ${cwd || 'default cwd'}`);
+                        const isWindows = process.platform === 'win32';
+                        // Ensure cwd exists if provided
+                         if (cwd && !fs.existsSync(cwd)) {
+                            const errorMsg = `[runCmd] Error: CWD does not exist: ${cwd}`;
+                            outputChannel.appendLine(errorMsg);
+                            console.error(errorMsg);
+                            reject({ err: new Error(`Working directory does not exist: ${cwd}`), stdout: '', stderr: '' });
+                            return;
+                        }
+
+                        const logMsg = `Executing: ${command} in ${cwd || 'default cwd'}`;
+                        console.log(logMsg);
+                        outputChannel.appendLine(logMsg);
+                        
+                        // On Windows, explicitly try to use ComSpec, fallback to system32 cmd.exe to avoid ENOENT
+                        const shellPath = isWindows ? (process.env.ComSpec || 'C:\\Windows\\System32\\cmd.exe') : true;
+
                         const child = cp.spawn(command, {
-                            shell: true,
+                            shell: shellPath,
                             cwd: cwd,
-                            env: process.env 
+                            env: { ...process.env }
                         });
 
                         let stdout = '';
                         let stderr = '';
 
-                        child.stdout.on('data', (data) => { stdout += data.toString(); });
-                        child.stderr.on('data', (data) => { stderr += data.toString(); });
+                        child.stdout.on('data', (data) => { 
+                            const str = data.toString();
+                            stdout += str;
+                            outputChannel.append(str);
+                        });
+                        child.stderr.on('data', (data) => { 
+                            const str = data.toString();
+                            stderr += str;
+                            outputChannel.append(str);
+                        });
 
                         child.on('close', (code) => {
                             if (code === 0) {
                                 resolve({ stdout, stderr });
                             } else {
-                                reject({ err: new Error(`Command failed with code ${code}`), stdout, stderr });
+                                const errorMsg = `Command failed with code ${code}`;
+                                outputChannel.appendLine(errorMsg);
+                                reject({ err: new Error(errorMsg), stdout, stderr });
                             }
                         });
                         
                         child.on('error', (err) => {
+                             const errorMsg = `Command execution error: ${err.message}`;
+                             outputChannel.appendLine(errorMsg);
                              reject({ err, stdout, stderr });
                         });
                     });
@@ -123,6 +153,7 @@ export function activate(context: vscode.ExtensionContext) {
                         } catch (err: any) {
                             const errorMsg = err.message || String(err);
                             console.error('Failed to list servers:', err);
+                            outputChannel.appendLine(`Failed to list servers: ${errorMsg}`);
                             vscode.window.showErrorMessage('Failed to list servers: ' + errorMsg);
                             panel.webview.postMessage({ command: 'error', message: errorMsg });
                         }
@@ -214,6 +245,7 @@ export function activate(context: vscode.ExtensionContext) {
 
                     case 'install_community_server':
                         const { repo, id } = message.server;
+                        const envVars = message.env || {};
                         const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
                         
                         if (!workspaceFolder) {
@@ -221,7 +253,17 @@ export function activate(context: vscode.ExtensionContext) {
                             return;
                         }
 
+                        // Verify Git is available
+                        try {
+                            await runCmd('git --version');
+                        } catch (e) {
+                             vscode.window.showErrorMessage('Git is not available. Please install Git and reload VS Code.');
+                             panel.webview.postMessage({ command: 'operation_error', message: 'Git not found in PATH' });
+                             return;
+                        }
+
                         vscode.window.showInformationMessage(`Installing ${id}...`);
+                        outputChannel.show(); // Show the output channel so user can see progress
                         
                         const mcpDir = path.join(workspaceFolder, 'mcp-servers');
                         const serverDir = path.join(mcpDir, id);
@@ -233,9 +275,11 @@ export function activate(context: vscode.ExtensionContext) {
                         try {
                             // 1. Clone
                             if (!fs.existsSync(serverDir)) {
+                                outputChannel.appendLine(`Cloning ${repo} to ${serverDir}...`);
                                 await runCmd(`git clone ${repo} ${id}`, mcpDir);
                             } else {
                                 console.log('Directory exists, skipping clone');
+                                outputChannel.appendLine(`Directory ${serverDir} exists, skipping clone.`);
                             }
 
                             // 2. Detect & Install
@@ -254,9 +298,14 @@ export function activate(context: vscode.ExtensionContext) {
                                 const imageName = `mcp-community-${id.toLowerCase()}`;
                                 await runCmd(`docker build -t ${imageName} .`, serverDir);
 
+                                const envArgs: string[] = [];
+                                for (const [key, value] of Object.entries(envVars)) {
+                                    envArgs.push("-e", `${key}=${value}`);
+                                }
+
                                 config.mcpServers[id] = {
                                     command: "docker",
-                                    args: ["run", "-i", "--rm", imageName]
+                                    args: ["run", "-i", "--rm", ...envArgs, imageName]
                                 };
                                 
                                 fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
@@ -285,7 +334,8 @@ export function activate(context: vscode.ExtensionContext) {
                                 if (fs.existsSync(buildPath)) {
                                     config.mcpServers[id] = {
                                         command: "node",
-                                        args: [buildPath]
+                                        args: [buildPath],
+                                        env: envVars
                                     };
                                     fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
                                     
@@ -336,13 +386,15 @@ export function activate(context: vscode.ExtensionContext) {
                                 if (fs.existsSync(scriptPath)) {
                                     config.mcpServers[id] = {
                                         command: scriptPath,
-                                        args: []
+                                        args: [],
+                                        env: envVars
                                     };
                                 } else {
                                     // Fallback: python -m <id> or python -m <scriptName>
                                     config.mcpServers[id] = {
                                         command: pythonPath,
-                                        args: ["-m", scriptName]
+                                        args: ["-m", scriptName],
+                                        env: envVars
                                     };
                                 }
 
@@ -357,10 +409,16 @@ export function activate(context: vscode.ExtensionContext) {
                             }
 
                         } catch (e: any) {
-                            const msg = e.err?.message || e.stderr || String(e);
+                            // Enhanced Error Handling
+                            const msg = e.err?.message || String(e);
+                            const details = (e.stderr || e.stdout || "No output").trim();
+                            
                             console.error('Install failed:', e);
-                            vscode.window.showErrorMessage(`Installation failed: ${msg}`);
-                            panel.webview.postMessage({ command: 'operation_error', message: `Install failed: ${msg}` });
+                            outputChannel.appendLine(`[Error] Install failed: ${msg}`);
+                            outputChannel.appendLine(`[Details] ${details}`);
+                            
+                            vscode.window.showErrorMessage(`Installation failed: ${msg}. Check 'MCP Manager' output for details.`);
+                            panel.webview.postMessage({ command: 'operation_error', message: `Install failed: ${msg}\n${details}` });
                         }
                         return;
                 }
@@ -489,7 +547,7 @@ async function runMcpToolCall(config: any, toolName: string, args: any): Promise
         };
 
         const cp_proc = cp.spawn(config.command, dockerArgs, {
-            env: process.env,
+            env: { ...process.env, ...(config.env || {}) },
             shell: true
         });
 
@@ -689,7 +747,8 @@ async function fetchAndParseCommunityServers(): Promise<ParsedServer[]> {
                                 repo,
                                 subpath,
                                 category: currentCategory,
-                                iconUrl
+                                iconUrl,
+                                configSchema: SERVER_CONFIGS[title.toLowerCase().replace(/\s+/g, '-')]
                             });
                         }
                     }

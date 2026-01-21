@@ -2725,6 +2725,7 @@ var SERVER_CONFIGS = {
 function activate(context) {
   console.log("MCP Manager extension is active");
   let currentPanel = void 0;
+  const outputChannel = vscode.window.createOutputChannel("MCP Manager");
   const HOME = process.env.USERPROFILE || process.env.HOME || "";
   const configPaths = [
     path.join(HOME, ".docker", "mcp", "catalogs", "docker-mcp.yaml"),
@@ -2780,28 +2781,47 @@ function activate(context) {
       async (message) => {
         const runCmd = (command, cwd) => {
           return new Promise((resolve, reject) => {
-            console.log(`Executing: ${command} in ${cwd || "default cwd"}`);
+            const isWindows = process.platform === "win32";
+            if (cwd && !fs.existsSync(cwd)) {
+              const errorMsg = `[runCmd] Error: CWD does not exist: ${cwd}`;
+              outputChannel.appendLine(errorMsg);
+              console.error(errorMsg);
+              reject({ err: new Error(`Working directory does not exist: ${cwd}`), stdout: "", stderr: "" });
+              return;
+            }
+            const logMsg = `Executing: ${command} in ${cwd || "default cwd"}`;
+            console.log(logMsg);
+            outputChannel.appendLine(logMsg);
+            const shellPath = isWindows ? process.env.ComSpec || "C:\\Windows\\System32\\cmd.exe" : true;
             const child = cp.spawn(command, {
-              shell: true,
+              shell: shellPath,
               cwd,
-              env: process.env
+              env: { ...process.env }
             });
             let stdout = "";
             let stderr = "";
             child.stdout.on("data", (data) => {
-              stdout += data.toString();
+              const str2 = data.toString();
+              stdout += str2;
+              outputChannel.append(str2);
             });
             child.stderr.on("data", (data) => {
-              stderr += data.toString();
+              const str2 = data.toString();
+              stderr += str2;
+              outputChannel.append(str2);
             });
             child.on("close", (code) => {
               if (code === 0) {
                 resolve({ stdout, stderr });
               } else {
-                reject({ err: new Error(`Command failed with code ${code}`), stdout, stderr });
+                const errorMsg = `Command failed with code ${code}`;
+                outputChannel.appendLine(errorMsg);
+                reject({ err: new Error(errorMsg), stdout, stderr });
               }
             });
             child.on("error", (err) => {
+              const errorMsg = `Command execution error: ${err.message}`;
+              outputChannel.appendLine(errorMsg);
               reject({ err, stdout, stderr });
             });
           });
@@ -2816,6 +2836,7 @@ function activate(context) {
             } catch (err) {
               const errorMsg = err.message || String(err);
               console.error("Failed to list servers:", err);
+              outputChannel.appendLine(`Failed to list servers: ${errorMsg}`);
               vscode.window.showErrorMessage("Failed to list servers: " + errorMsg);
               panel.webview.postMessage({ command: "error", message: errorMsg });
             }
@@ -2894,12 +2915,21 @@ function activate(context) {
             return;
           case "install_community_server":
             const { repo, id } = message.server;
+            const envVars = message.env || {};
             const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
             if (!workspaceFolder) {
               vscode.window.showErrorMessage("No workspace folder open. Please open a folder to clone the server.");
               return;
             }
+            try {
+              await runCmd("git --version");
+            } catch (e) {
+              vscode.window.showErrorMessage("Git is not available. Please install Git and reload VS Code.");
+              panel.webview.postMessage({ command: "operation_error", message: "Git not found in PATH" });
+              return;
+            }
             vscode.window.showInformationMessage(`Installing ${id}...`);
+            outputChannel.show();
             const mcpDir = path.join(workspaceFolder, "mcp-servers");
             const serverDir = path.join(mcpDir, id);
             if (!fs.existsSync(mcpDir)) {
@@ -2907,9 +2937,11 @@ function activate(context) {
             }
             try {
               if (!fs.existsSync(serverDir)) {
+                outputChannel.appendLine(`Cloning ${repo} to ${serverDir}...`);
                 await runCmd(`git clone ${repo} ${id}`, mcpDir);
               } else {
                 console.log("Directory exists, skipping clone");
+                outputChannel.appendLine(`Directory ${serverDir} exists, skipping clone.`);
               }
               let config = { mcpServers: {} };
               const configPath = getMcpConfigPath();
@@ -2922,9 +2954,13 @@ function activate(context) {
                 panel.webview.postMessage({ command: "operation_start", message: `Building Docker image...` });
                 const imageName = `mcp-community-${id.toLowerCase()}`;
                 await runCmd(`docker build -t ${imageName} .`, serverDir);
+                const envArgs = [];
+                for (const [key, value] of Object.entries(envVars)) {
+                  envArgs.push("-e", `${key}=${value}`);
+                }
                 config.mcpServers[id] = {
                   command: "docker",
-                  args: ["run", "-i", "--rm", imageName]
+                  args: ["run", "-i", "--rm", ...envArgs, imageName]
                 };
                 fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
                 vscode.window.showInformationMessage(`Successfully installed - running via Docker!`);
@@ -2946,7 +2982,8 @@ function activate(context) {
                 if (fs.existsSync(buildPath)) {
                   config.mcpServers[id] = {
                     command: "node",
-                    args: [buildPath]
+                    args: [buildPath],
+                    env: envVars
                   };
                   fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
                   vscode.window.showInformationMessage(`Successfully installed Node.js server!`);
@@ -2981,12 +3018,14 @@ function activate(context) {
                 if (fs.existsSync(scriptPath)) {
                   config.mcpServers[id] = {
                     command: scriptPath,
-                    args: []
+                    args: [],
+                    env: envVars
                   };
                 } else {
                   config.mcpServers[id] = {
                     command: pythonPath,
-                    args: ["-m", scriptName]
+                    args: ["-m", scriptName],
+                    env: envVars
                   };
                 }
                 fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
@@ -2997,10 +3036,14 @@ function activate(context) {
                 panel.webview.postMessage({ command: "server_cloned", serverId: id });
               }
             } catch (e) {
-              const msg = e.err?.message || e.stderr || String(e);
+              const msg = e.err?.message || String(e);
+              const details = (e.stderr || e.stdout || "No output").trim();
               console.error("Install failed:", e);
-              vscode.window.showErrorMessage(`Installation failed: ${msg}`);
-              panel.webview.postMessage({ command: "operation_error", message: `Install failed: ${msg}` });
+              outputChannel.appendLine(`[Error] Install failed: ${msg}`);
+              outputChannel.appendLine(`[Details] ${details}`);
+              vscode.window.showErrorMessage(`Installation failed: ${msg}. Check 'MCP Manager' output for details.`);
+              panel.webview.postMessage({ command: "operation_error", message: `Install failed: ${msg}
+${details}` });
             }
             return;
         }
@@ -3111,7 +3154,7 @@ async function runMcpToolCall(config, toolName, args) {
       }
     };
     const cp_proc = cp.spawn(config.command, dockerArgs, {
-      env: process.env,
+      env: { ...process.env, ...config.env || {} },
       shell: true
     });
     let stdout = "";
@@ -3274,7 +3317,8 @@ async function fetchAndParseCommunityServers() {
                 repo,
                 subpath,
                 category: currentCategory,
-                iconUrl
+                iconUrl,
+                configSchema: SERVER_CONFIGS[title.toLowerCase().replace(/\s+/g, "-")]
               });
             }
           }

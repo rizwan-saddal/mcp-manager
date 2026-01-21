@@ -165,7 +165,7 @@ export default function App() {
   const [search, setSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
   const [currentPage, setCurrentPage] = useState(1);
-  const ITEMS_PER_PAGE = 9;
+  const ITEMS_PER_PAGE = 24;
 
   const activeList = dataSource === 'docker' ? servers : communityServers;
   const filteredServers = activeList.filter(s => 
@@ -187,6 +187,10 @@ export default function App() {
   const toggleServer = (server: McpServer) => {
     if (globalThis.window?.vscode) {
         if (dataSource === 'community') {
+            if (server.configSchema && server.configSchema.length > 0) {
+                setConfiguringServer(server);
+                return;
+            }
             addLog(`Initiating installation for ${server.id}...`, 'info');
             globalThis.window.vscode.postMessage({ command: 'install_community_server', server });
             return;
@@ -208,13 +212,21 @@ export default function App() {
 
   const handleConfigSubmit = (env: Record<string, string>) => {
       if (!configuringServer) return;
-      addLog(`Starting server with config: ${configuringServer.id}...`, 'info');
-      globalThis.window.vscode.postMessage({ command: 'add_server', serverId: configuringServer.id, env });
+      
+      if (configuringServer.repo) {
+          // Community Server
+          addLog(`Starting installation with config: ${configuringServer.id}...`, 'info');
+          globalThis.window.vscode.postMessage({ command: 'install_community_server', server: configuringServer, env });
+      } else {
+          // Docker/Local Server
+          addLog(`Starting server with config: ${configuringServer.id}...`, 'info');
+          globalThis.window.vscode.postMessage({ command: 'add_server', serverId: configuringServer.id, env });
+      }
       setConfiguringServer(null);
   };
 
   return (
-    <div className="min-h-screen p-6 lg:p-12 max-w-[1600px] mx-auto text-sm selection:bg-neon-cyan/30">
+    <div className="min-h-screen p-4 lg:p-8 max-w-[1800px] mx-auto text-sm selection:bg-neon-cyan/30">
       {/* Header */}
       <header className="flex flex-col md:flex-row md:items-end justify-between gap-8 mb-16 relative z-10">
         <div className="space-y-4">
@@ -273,9 +285,9 @@ export default function App() {
         </div>
       </header>
 
-      <div className="grid grid-cols-1 xl:grid-cols-4 gap-12">
+      <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
         {/* Sidebar / Controls */}
-        <aside className="xl:col-span-1 space-y-6">
+        <aside className="xl:col-span-1 space-y-4">
           <div className="glass p-5 space-y-6 bg-black/20">
             <div className="relative group">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted group-focus-within:text-neon-cyan transition-colors" />
@@ -356,7 +368,7 @@ export default function App() {
           )}
 
           {!loading && !error && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               <AnimatePresence>
                 {displayedServers.map((s, idx) => (
                 <motion.div
@@ -364,38 +376,27 @@ export default function App() {
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.98 }}
-                  transition={{ delay: idx * 0.03, duration: 0.3 }}
+                  transition={{ delay: idx * 0.02, duration: 0.2 }}
                   key={s.id}
-                  className="glass-card p-0 flex flex-col group h-full"
+                  className="glass-card flex flex-col group h-full hover:bg-white/5 transition-colors border border-white/5 hover:border-white/10"
                 >
-                  <div className="p-6 pb-4 flex flex-col grow relative z-10">
-                    <div className="flex justify-between items-start mb-4">
-                      <div className="p-2.5 rounded-xl bg-linear-to-br from-white/10 to-white/5 border border-white/5 backdrop-blur-md shadow-inner text-white/80 group-hover:text-neon-cyan group-hover:from-neon-cyan/20 group-hover:to-neon-cyan/5 transition-all duration-500 flex items-center justify-center overflow-hidden">
-                        <ServerIcon server={s} categoryIcon={getCategoryIcon(s.category)} />
-                      </div>
-                      <div className="flex gap-2">
-                        {s.enabled && (
-                          <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[9px] font-bold uppercase tracking-wider shadow-[0_0_10px_-3px_rgba(52,211,153,0.3)]">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                            {' '}
-                            Active
-                          </div>
+                  <div className="p-4 flex flex-col h-full relative z-10">
+                    <div className="flex justify-between items-start gap-3 mb-2">
+                       <div className="flex items-center gap-3 min-w-0">
+                            <div className="shrink-0 p-1.5 rounded-lg bg-linear-to-br from-white/10 to-white/5 border border-white/5 text-white/80 group-hover:text-neon-cyan transition-colors">
+                                <ServerIcon server={s} categoryIcon={getCategoryIcon(s.category)} />
+                            </div>
+                            <h3 className="text-sm font-semibold text-white group-hover:text-neon-cyan transition-colors truncate">{s.title}</h3>
+                       </div>
+
+                       {s.enabled && (
+                            <div className="shrink-0 w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.6)]" title="Active" />
                         )}
-                      </div>
                     </div>
 
-                    <h3 className="text-lg font-semibold mb-2 text-white group-hover:text-neon-cyan transition-colors duration-300 tracking-tight">{s.title}</h3>
-                    <p className="text-text-secondary/80 text-sm leading-relaxed mb-4 grow font-light line-clamp-3">{s.description}</p>
+                    <p className="text-text-secondary/70 text-[11px] leading-relaxed mb-3 font-light line-clamp-2 min-h-[2.5em] grow">{s.description}</p>
 
-                    <div className="flex items-center gap-2 mt-auto pt-4">
-                        <div className="mono text-[9px] text-text-muted tracking-wider uppercase border border-white/5 px-2 py-1 rounded bg-black/20 flex items-center gap-2 truncate max-w-full">
-                           <span className="text-neon-cyan/50">&gt;</span> {s.image}
-                        </div>
-                    </div>
-                  </div>
-                  
-                  <div className="p-4 pt-0 mt-auto relative z-10">
-                      <ActionButton 
+                     <ActionButton 
                         server={s} 
                         dataSource={dataSource} 
                         onToggle={() => toggleServer(s)} 
