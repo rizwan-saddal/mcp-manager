@@ -36,24 +36,35 @@ The extension manages its own `router_manifest.json`.
   * `MCP: Sync Configuration`: Force a sync of the router manifest.
   * `MCP: Show Status`: detailed status notification.
 
-## 🤖 Usage with Agents (VS Code & Antigravity)
+## 🧪 Verification & Usage Walkthrough
 
-Once installed, **MCP Gateway** exposes your tools to any AI agent that supports the Model Context Protocol.
+Follow these steps to verify that **MCP Gateway** is correctly orchestrating your tools for your AI Agent.
 
-### 1. VS Code Copilot / Chat
+### Step 1: Open the Dashboard
 
-MCP Gateway automatically registers itself as a tool provider.
+1. Press `Ctrl+Shift+P` (Cmd+Shift+P on Mac).
+2. Type and select **`MCP: Show Status`**.
+3. A premium **MCP Manager Dashboard** will open.
+   * check for the **"Connected"** badge.
+   * Note the **Active Servers** count.
 
-* Open Github Copilot Chat.
-* Ask: *"Please fetch the latest stock price using the fetch tool"* (if configured).
-* The gateway will spin up the necessary server, run the tool, and shut it down.
+### Step 2: Ask your Agent
 
-### 2. Google Antigravity
+1. Open **GitHub Copilot Chat** (or your Antigravity Agent).
+2. Ask a question that requires a tool.
+   * *Example (using the default 'time' or 'fetch' tool if configured)*:
+   > "Please search online for the current time in Tokyo using Brave Search."
+   *(Note: Ensure you have the `brave-search` tool configured in `router_manifest.json`)*.
 
-The extension automatically syncs your active configuration to Antigravity's workspace.
+### Step 3: Watch it Happen (Accountability)
 
-* Just ask Antigravity: *"Use the `sqlite` tool to query the database."*
-* It works out of the box.
+1. The Agent will mistakenly or correctly identify the tool and send a request.
+2. **MCP Gateway** intercepts the request, spins up the Python environment via `uv`, executes the tool, and shuts it down.
+3. **Switch back to the MCP Manager Dashboard.**
+4. Look at the **Accountability & Recent Logs** table.
+   * You will see a new entry: **User (Default) | brave_search | Success**.
+   * The **Usage Share** bar for that tool will update.
+   * This proves the end-to-end connection is working!
 
 ### 3. Adding New Servers
 
