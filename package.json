@@ -2,7 +2,7 @@
   "name": "mcp-gateway",
   "displayName": "MCP Gateway",
   "description": "Lazy Loading Router for MCP tools using uv",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "icon": "assets/icon.png",
   "repository": {
     "type": "git",

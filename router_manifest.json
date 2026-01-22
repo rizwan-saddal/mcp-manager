@@ -1,0 +1,29 @@
+{
+    "tools": [
+        {
+            "name": "convert_to_markdown",
+            "description": "Convert a file or URI to markdown using Microsoft MarkItDown",
+            "command": [
+                "uv",
+                "run",
+                "--python",
+                "3.12",
+                "--with",
+                "markitdown-mcp",
+                "markitdown-mcp"
+            ],
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "uri": {
+                        "type": "string",
+                        "description": "Path or URL to the file to convert"
+                    }
+                },
+                "required": [
+                    "uri"
+                ]
+            }
+        }
+    ]
+}
