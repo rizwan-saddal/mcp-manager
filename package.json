@@ -2,9 +2,9 @@
   "name": "mcp-gateway",
   "displayName": "MCP Gateway",
   "description": "Lazy Loading Router for MCP tools using uv",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "publisher": "rizwan-saddal",
-  "icon": "assets/icon.png",
+  "icon": "assets/mcp-gateway-icon.png",
   "repository": {
     "type": "git",
     "url": "https://github.com/rizwan-saddal/mcp-manager"

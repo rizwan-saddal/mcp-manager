@@ -1,6 +1,6 @@
 # MCP Gateway (Lazy Router)
 
-![MCP Manager Icon](https://github.com/rizwan-saddal/mcp-manager/raw/main/assets/icon.png)
+![MCP Manager Icon](./assets/mcp-gateway-icon.png)
 
 **The "Lazy Loading Router" for MCP tools.**
 

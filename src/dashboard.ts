@@ -74,16 +74,16 @@ export class DashboardGenerator {
     <title>MCP Manager Dashboard</title>
     <style>
         :root {
-            --bg-color: #0d1117;
-            --card-bg: #161b22;
-            --text-primary: #c9d1d9;
+            --bg-color: #050505;
+            --card-bg: #121212;
+            --text-primary: #e6e6e6;
             --text-secondary: #8b949e;
-            --accent: #58a6ff;
-            --accent-glow: rgba(88, 166, 255, 0.3);
+            --accent: #FFB300;
+            --accent-glow: rgba(255, 179, 0, 0.3);
             --success: #2ea043;
             --error: #da3633;
             --border: #30363d;
-            --grad: linear-gradient(135deg, #1f6feb 0%, #58a6ff 100%);
+            --grad: linear-gradient(135deg, #FF8F00 0%, #FFB300 100%);
         }
         
         body {
@@ -150,9 +150,9 @@ export class DashboardGenerator {
 
         .data-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; box-shadow: 0 8px 24px rgba(0,0,0,0.2); }
         table { width: 100%; border-collapse: collapse; }
-        th { text-align: left; padding: 14px 20px; background: #21262d; color: var(--text-secondary); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+        th { text-align: left; padding: 14px 20px; background: rgba(255, 255, 255, 0.03); color: var(--text-secondary); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
         td { padding: 14px 20px; border-top: 1px solid var(--border); }
-        tr:hover td { background: rgba(88, 166, 255, 0.03); }
+        tr:hover td { background: rgba(255, 179, 0, 0.03); }
 
         .tool-name { font-weight: 700; color: #fff; }
         .tool-cmd { font-family: ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace; font-size: 11px; color: var(--text-secondary); background: rgba(0,0,0,0.2); padding: 2px 6px; border-radius: 4px; }
@@ -163,7 +163,7 @@ export class DashboardGenerator {
         .tag-error { background: rgba(248, 81, 73, 0.15); color: #f85149; }
 
         .progress-box { display: flex; align-items: center; gap: 12px; width: 100%; }
-        .progress-bar { flex: 1; height: 6px; background: #21262d; border-radius: 3px; overflow: hidden; }
+        .progress-bar { flex: 1; height: 6px; background: rgba(255, 255, 255, 0.05); border-radius: 3px; overflow: hidden; }
         .progress-fill { height: 100%; background: var(--grad); box-shadow: 0 0 8px var(--accent-glow); }
         .progress-val { font-size: 12px; color: var(--text-secondary); width: 35px; text-align: right; font-weight: 600; }
 
