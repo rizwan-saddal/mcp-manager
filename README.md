@@ -83,7 +83,7 @@ Adding new tools is now fully automated.
 ## 🤝 Contributing
 
 * **Repo**: [https://github.com/rizwan-saddal/mcp-manager](https://github.com/rizwan-saddal/mcp-manager)
-* **Publisher**: rizwan-saddal
+* **Lead Innovator**: rizwan-saddal
 
 ---
 Powered by `Craze for AI` and Model Context Protocol (and lots of love for coding)

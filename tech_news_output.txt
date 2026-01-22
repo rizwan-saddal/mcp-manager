@@ -1,0 +1,210 @@
+Fetching global tech news...
+
+--- Latest Tech News Headlines ---
+
+[News](./?hl=en-US&gl=US&ceid=US%3Aen)
+
+Google News
+
+Advanced search
+
+Help
+
+* Help
+* Privacy
+* Terms
+* About Google
+* Get the Android app
+* Get the iOS app
+* Send feedback
+
+Settings
+
+* Settings
+* Language & regionEnglish (United States)
+
+[Sign in](https://accounts.google.com/ServiceLogin?passive=1209600&continue=https://news.google.com/search?q%3Dtechnology%26hl%3Den-US%26gl%3DUS%26ceid%3DUS:en&followup=https://news.google.com/search?q%3Dtechnology%26hl%3Den-US%26gl%3DUS%26ceid%3DUS:en&hl=en-US&ec=GAZAqgM)
+
+[Home](./home?hl=en-US&gl=US&ceid=US%3Aen)
+
+For you
+
+Following
+
+[U.S.](./topics/CAAqIggKIhxDQkFTRHdvSkwyMHZNRGxqTjNjd0VnSmxiaWdBUAE?hl=en-US&gl=US&ceid=US%3Aen)
+
+[World](./topics/CAAqJggKIiBDQkFTRWdvSUwyMHZNRGx1YlY4U0FtVnVHZ0pWVXlnQVAB?hl=en-US&gl=US&ceid=US%3Aen)
+
+[Local](./topics/CAAqHAgKIhZDQklTQ2pvSWJHOWpZV3hmZGpJb0FBUAE?hl=en-US&gl=US&ceid=US%3Aen)
+
+[Business](./topics/CAAqJggKIiBDQkFTRWdvSUwyMHZNRGx6TVdZU0FtVnVHZ0pWVXlnQVAB?hl=en-US&gl=US&ceid=US%3Aen)
+
+[Technology](./topics/CAAqJggKIiBDQkFTRWdvSUwyMHZNRGRqTVhZU0FtVnVHZ0pWVXlnQVAB?hl=en-US&gl=US&ceid=US%3Aen)
+
+[Entertainment](./topics/CAAqJggKIiBDQkFTRWdvSUwyMHZNREpxYW5RU0FtVnVHZ0pWVXlnQVAB?hl=en-US&gl=US&ceid=US%3Aen)
+
+[Sports](./topics/CAAqJggKIiBDQkFTRWdvSUwyMHZNRFp1ZEdvU0FtVnVHZ0pWVXlnQVAB?hl=en-US&gl=US&ceid=US%3Aen)
+
+[Science](./topics/CAAqJggKIiBDQkFTRWdvSUwyMHZNRFp0Y1RjU0FtVnVHZ0pWVXlnQVAB?hl=en-US&gl=US&ceid=US%3Aen)
+
+[Health](./topics/CAAqIQgKIhtDQkFTRGdvSUwyMHZNR3QwTlRFU0FtVnVLQUFQAQ?hl=en-US&gl=US&ceid=US%3Aen)
+
+More
+
+[News](./?hl=en-US&gl=US&ceid=US%3Aen)
+
+Google News
+
+---
+
+![](https://encrypted-tbn0.gstatic.com/faviconV2?url=https://www.upstreamonline.com&client=NEWS_360&size=96&type=FAVICON&fallback_opts=TYPE,SIZE,URL)
+
+Upstream Online
+
+More
+
+[Shell's technology head to step down](./read/CBMijgFBVV95cUxQa2ZBSE42WUFmQ2RtbVpiOEYzWjZ2NDM2dXRJaEZ2Y016eXpxRS16NGtKT3F5Z1pNWmh1SWR0dmZTb3BpRUM0UVBoZ3ppcmNHV0E2YzFQYi1sUXFmNEZ2a1I2ZFl6QXAzajJoeHlXN0F2ekExdloyTXlpM3FPMVhnajdUMWlXZEctZXI3c2JB?hl=en-US&gl=US&ceid=US%3Aen)
+
+![](/api/attachments/CC8iK0NnNWFMV3AxYVMxR1QzUnFOMlpGVFJERUF4aW1CU2dLTWdhaFZwQUxwZ2M=-w200-h112-p-df)
+
+2 days ago
+
+---
+
+By Rebecca Conan
+
+---
+
+![](https://encrypted-tbn0.gstatic.com/faviconV2?url=https://www.nasa.gov&client=NEWS_360&size=96&type=FAVICON&fallback_opts=TYPE,SIZE,URL)
+
+NASA (.gov)
+
+More
+
+[NASA Tests Technology Offering Potential Fuel Savings for Commercial Aviation](./read/CBMizAFBVV95cUxOckxxc2N0aWczOFppbjBRZ3ZXTkQ2N0dBQV9TSG1Ia2FKYXZ3NE1uSFQ4TmdYd1d5b2pPLV9XaDI2TjdPWE5fTXdnQmRLWWVUZ2F0UmtGS3dEVWZhYlNaSkhqSHB4M01WM0VrRXJWRWFDVlZDRTJNLXRJdzZfODZaSFA1S3Z0SV9nbnFnSXJqdVJ0eURKM2h6M1hUSlg3TkI0S2xzamxkVWVKZF9TSkt3emoydzJoN0F4UE9McHAyeVkxZ3k2VGFKb1FtX2I?hl=en-US&gl=US&ceid=US%3Aen)
+
+![](/api/attachments/CC8iK0NnNUtiek5JVkc0MlNFTldkVmhJVFJERUF4aW1CU2dLTWdZQlVKTG9zUVk=-w200-h112-p-df)
+
+13 hours ago
+
+---
+
+![](https://encrypted-tbn2.gstatic.com/faviconV2?url=https://thehill.com&client=NEWS_360&size=96&type=FAVICON&fallback_opts=TYPE,SIZE,URL)
+
+The Hill
+
+More
+
+[OpenAI rolls out age prediction technology for ChatGPT](./read/CBMihAFBVV95cUxPRWVfTm42NmZRUmp3VXc2d0ZKNUl4dnVfSmoxWUNXLTRoTlBmVUNLakZ1TGRua1d2SExqOXpuQjQwVXRHb1BGSmh5cU9oWmNqeHZlV09leTQ0ekYxSHdHZTUtN0Z2X3hFUVJQbm5lcm9VUFNDTjZHdldqdnNyTk84MzV0SVLSAYoBQVVfeXFMUEhIbkpYU3Z4SlRESGJSWFBmWEJPRVVZTGltZXhVTXVTOG5UYzdrVGpHMkpBQ00xSG9oYUtQQlJZSGpjWjBnMjc3TW5aWjUtTE5fU3dGa1pkd3NwX2Y2eVZvV2NVM3VJWHVEb1lFeklpLWpfRl8wdGF5Z0dMb3dGZmhpR2l3d3ZWWHh3?hl=en-US&gl=US&ceid=US%3Aen)
+
+![](/api/attachments/CC8iK0NnNDBhRVpJYjNOZldIQjVVRTFTVFJDZkF4amlCU2dLTWdZbGRZeXRMUVU=-w200-h112-p-df)
+
+15 hours ago
+
+---
+
+By Julia Shapero
+
+---
+
+![](https://encrypted-tbn2.gstatic.com/faviconV2?url=https://about.fb.com&client=NEWS_360&size=96&type=FAVICON&fallback_opts=TYPE,SIZE,URL)
+
+Meta Store
+
+More
+
+[Introducing AI Glasses Impact Grants to Advance Wearable Technology for Good](./read/CBMikgFBVV95cUxPRDRUaDJ6dkl4dml6Yk5zY081TjY4OXJjYWE4Qkg2TWpaVURGS3NqRFRDTG11NXU3UTZQRDg3aWRxNEsxb1F4SXpZTVFsbkRrR3NSRzdyVWM1cnlsUDBlbjZZVjdSdEF0V3J4Y3c1b3dpZXh6Qy1oeXFkY3VzQ0Vxc05NeGRXZlpuNTZNVjBURVdEd9IBlwFBVV95cUxQdy1hemtiWGxSVjlrelZpa1U0NjVHQjdFb1g2am54TjBoSkZMalRkQmJBRXhoLWQ5ajd0OFVmcG1MY3VyeTNXY3gteWxVYXZyU0tkNWxXY2U3dGp0VHlkcEZpdWJlV1BYZFJFanJScTM4eVVQZ3VRazFUcFlkQV9DLUt2VmlMbW5WNlctZWdGRHZPYlFFcGdB?hl=en-US&gl=US&ceid=US%3Aen)
+
+![](/api/attachments/CC8iK0NnNUJXSHBmVmtOaWVXTTJiWEZqVFJDZkF4ampCU2dLTWdhdFZKS1BwUWM=-w200-h112-p-df)
+
+17 hours ago
+
+---
+
+![](https://encrypted-tbn3.gstatic.com/faviconV2?url=https://www.morningstar.com&client=NEWS_360&size=96&type=FAVICON&fallback_opts=TYPE,SIZE,URL)
+
+Morningstar
+
+More
+
+[Technology Stock Outlook: Secular Tailwinds Continue](./read/CBMijwFBVV95cUxQRThjMmducG9FS3YxQUMwVjlscDh1RzU0UWUtb0s1TXpPUGJRcmNPSU5rT2lpTDJqaTJwdDJIeXBIdGtRdzU3bXlMa0VBRVdBM20zRzJZVW1ybzdYNEtIU1ltM0RFWDJxdE1QUE5KTkxXSFozSW1pcVE0TDloMWJ5eDdHX2prdk5FMjU3ektRdw?hl=en-US&gl=US&ceid=US%3Aen)
+
+![](/api/attachments/CC8iK0NnNHdSVVE0VEZkMGNVMWZUakU1VFJDZkF4ampCU2dLTWdZRkVJT0cxQUk=-w200-h112-p-df)
+
+6 days ago
+
+---
+
+By Dan Romanoff
+
+---
+
+![](https://encrypted-tbn2.gstatic.com/faviconV2?url=https://www.csis.org&client=NEWS_360&size=96&type=FAVICON&fallback_opts=TYPE,SIZE,URL)
+
+CSIS | Center for Strategic and International Studies
+
+More
+
+[Tech Edge: A Living Playbook for America’s Technology Long Game](./read/CBMijgFBVV95cUxQdU9nVmh2VXk2RzJ0Mmx1VXozRlVPYzRDNVZKdjczMHdEYzFCRUJKLUgtOGxoVnJnQW9GcDRxTzNKQklCRmpBNUtwYWFKcnMweTBEczFRVDUxeERRS2pTVVdmd3h4UmJkWElVMDBYQWw3WTdELXhyN1MweU9aZUgzb043MjU0WndBNlBOb0hB?hl=en-US&gl=US&ceid=US%3Aen)
+
+![](/api/attachments/CC8iJ0NnNUZhamRQWjBKQ2NuQnhPWEpsVFJDc0FoajBBeWdLTWdNUnNBUQ=-w200-h112-p-df)
+
+2 days ago
+
+---
+
+![](https://encrypted-tbn3.gstatic.com/faviconV2?url=https://www.nba.com&client=NEWS_360&size=96&type=FAVICON&fallback_opts=TYPE,SIZE,URL)
+
+NBA
+
+More
+
+[NBA Launchpad announces 5th group of emerging technology companies](./read/CBMid0FVX3lxTE1LbEZ2dTB0STUyOTJMTGZNS09fSThJbkdlaUJJYVBvNGVUaUhGbklDdElWWFhWNkhKVEhDZFVWRUo0djBibWdYZ01CdFNxWkVTZEZZYVhIWFhidlE0THl0Ti1zTEJvQ0cxM3JHbFhjbTRmUlowMHFv?hl=en-US&gl=US&ceid=US%3Aen)
+
+![](/api/attachments/CC8iK0NnNDJlV3h2VDI1aGRtZ3dXbm90VFJDZkF4ampCU2dLTWdhUm9wSnhQUWM=-w200-h112-p-df)
+
+13 hours ago
+
+---
+
+![](https://encrypted-tbn0.gstatic.com/faviconV2?url=https://www.cnbc.com&client=NEWS_360&size=96&type=FAVICON&fallback_opts=TYPE,SIZE,URL)
+
+CNBC
+
+More
+
+[From oil to AI: The Saudi-U.S. technology partnership](./read/CBMimgFBVV95cUxOR0tNcDRQVHBpMjdlX2ZSV2huZzdaaHlyOHVKdnMxUDdrQUdmbjI1TE5nZ1FzNmJtdTk3ZV82SjBLU2tTT1huMjlua2R6ODNRZm1LX2p1emM5OC1mUFBIamZpZEVPM0dxN2NOaENCcF9mNUotM1BDSHBydGM3QklFd0hsWmNiczlWUGdWRXk3Uk96Q0FHRjZ5WXdn?hl=en-US&gl=US&ceid=US%3Aen)
+
+![](/api/attachments/CC8iL0NnNWhRMEpsYkdjelRqQTFXSEEzVFJDZkF4amlCU2dLTWdrSkFvWW5SV05LSkFN=-w200-h112-p-df)
+
+2 hours ago
+
+---
+
+![](https://encrypted-tbn0.gstatic.com/faviconV2?url=https://nasawatch.com&client=NEWS_360&size=96&type=FAVICON&fallback_opts=TYPE,SIZE,URL)
+
+NASA Watch
+
+More
+
+[Space Section of OSTP Science & Technology Highlights Report](./read/CBMilwFBVV95cUxNMzNfNUdEMzlaU3B3LWJyQnppN3pvTkNlYjV4RzBsNURtOG9wNVZ0T1NaazVWODZ2SHNsS2pNUHdWRWJ5MFF0c05BamsyYVMyM3lyZks1Z3BCQXUtUWs4QVBBZ0t2bk95bjNBZldkUjJLVVA1R01yRi1pSFc0SjluemhEOGlmbFNnaUxqb25senF0X0RYYmo0?hl=en-US&gl=US&ceid=US%3Aen)
+
+![](/api/attachments/CC8iI0NnNDJUbXRZTVU5MGQwRlJkMVZqVFJDZkF4ampCU2dLTWdB=-w200-h112-p-df)
+
+14 hours ago
+
+---
+
+By Keith Cowing
+
+---
+
+![](https://encrypted-tbn3.gstatic.com/faviconV2?url=https://www.wbng.com&client=NEWS_360&size=96&type=FAVICON&fallback_opts=TYPE,SIZE,URL)
+
+wbng.com
+
+More
+
+[Town of Maine files lawsuit against Broome County IDA regarding technology park project](./read/CBMiuAFBVV95cUxPR1lxRUZYdU9ycFl4QTRCQU9QT29qeUlpbjFGRWU3ZE1SVzBOLWxsRXFYelcwTVBZWTRvelNUSGh1RnR6Z2NYSVB2ZFlnaEVlYXBON19wSkppMFFFc04yaWpaQzB3WFZRTUJ5Nk51UlZtYjhrUTRxODJpb3JZYzRHMVBFQ2NsQnpob0QzaTBWeExSVkhWNE1CWnpQa28wb3A3ajdFWm1meURfT0I3ZEUzWDdJaE5sRndx0gHMAUFVX3lxTE1aYVhxaEZrdmhTSnJSQlotVXVXVTRaYmx0SGxBcTJYeHBkZ2FLR1Z2UEctbk9WREUzTmZXdG0tOHotTThSNjlvU3BfNUNMQkI1akh1My16QTBaTHBnZnZ
+
+----------------------------------
