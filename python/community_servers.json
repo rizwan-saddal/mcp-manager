@@ -1,211 +1,207 @@
 {
-    "tools": [
-        {
-            "name": "brave_search",
-            "description": "Privacy-focused web search using Brave API.",
-            "command": [
-                "uv",
-                "run",
-                "mcp-server-brave-search"
-            ],
-            "inputSchema": {}
-        },
-        {
-            "name": "playwright",
-            "description": "Browser automation using Microsoft Playwright.",
-            "command": [
-                "npx",
-                "-y",
-                "@automatalabs/mcp-server-playwright"
-            ],
-            "inputSchema": {}
-        },
-        {
-            "name": "weather",
-            "description": "Get current weather using OpenWeatherMap or other providers.",
-            "command": [
-                "npx",
-                "-y",
-                "mcp-server-weather"
-            ],
-            "inputSchema": {}
-        },
-        {
-            "name": "aws",
-            "description": "AWS integration for managing cloud resources.",
-            "command": [
-                "npx",
-                "-y",
-                "mcp-server-aws"
-            ],
-            "inputSchema": {}
-        },
-        {
-            "name": "gitlab",
-            "description": "GitLab integration for issues and MRs.",
-            "command": [
-                "npx",
-                "-y",
-                "@sekora/gitlab-mcp"
-            ],
-            "inputSchema": {}
-        },
-        {
-            "name": "time",
-            "description": "Get current time and timezone info.",
-            "command": [
-                "uv",
-                "run",
-                "mcp-server-time"
-            ],
-            "inputSchema": {}
-        },
-        {
-            "name": "sequential_thinking",
-            "description": "A tool for structured, step-by-step thinking and problem solving.",
-            "command": [
-                "npx",
-                "-y",
-                "@modelcontextprotocol/server-sequential-thinking"
-            ],
-            "inputSchema": {}
-        },
-        {
-            "name": "everything",
-            "description": "Search for files and content dynamically.",
-            "command": [
-                "npx",
-                "-y",
-                "@modelcontextprotocol/server-everything"
-            ],
-            "inputSchema": {}
-        },
-        {
-            "name": "filesystem",
-            "description": "Read and write files on the local filesystem.",
-            "command": [
-                "npx",
-                "-y",
-                "@modelcontextprotocol/server-filesystem",
-                "${TARGET_PATH}"
-            ],
-            "inputSchema": {}
-        },
-        {
-            "name": "fetch",
-            "description": "Retrieve raw content from any URL.",
-            "command": [
-                "uv",
-                "run",
-                "mcp-server-fetch"
-            ],
-            "inputSchema": {}
-        },
-        {
-            "name": "sqlite_query",
-            "description": "Execute read-only SQL queries on a local database.",
-            "command": [
-                "uv",
-                "run",
-                "mcp-server-sqlite",
-                "--db-path",
-                "${DB_PATH}"
-            ],
-            "inputSchema": {}
-        },
-        {
-            "name": "git_read",
-            "description": "Read and search git repositories.",
-            "command": [
-                "uv",
-                "run",
-                "mcp-server-git",
-                "--repository",
-                "${REPO_PATH}"
-            ],
-            "inputSchema": {}
-        },
-        {
-            "name": "github_pr",
-            "description": "Interact with GitHub Issues and Pull Requests.",
-            "command": [
-                "uv",
-                "run",
-                "mcp-server-github"
-            ],
-            "inputSchema": {}
-        },
-        {
-            "name": "filesystem",
-            "description": "Read and write files on the local filesystem.",
-            "command": [
-                "uv",
-                "run",
-                "mcp-server-filesystem",
-                "${TARGET_PATH}"
-            ],
-            "inputSchema": {}
-        },
-        {
-            "name": "postgres",
-            "description": "Access PostgreSQL databases.",
-            "command": [
-                "uv",
-                "run",
-                "mcp-server-postgres",
-                "${POSTGRES_URL}"
-            ],
-            "inputSchema": {}
-        },
-        {
-            "name": "google_maps",
-            "description": "Search places and get directions via Google Maps.",
-            "command": [
-                "uv",
-                "run",
-                "mcp-server-google-maps"
-            ],
-            "inputSchema": {}
-        },
-        {
-            "name": "slack",
-            "description": "Interact with Slack workspaces.",
-            "command": [
-                "uv",
-                "run",
-                "mcp-server-slack"
-            ],
-            "inputSchema": {}
-        },
-        {
-            "name": "sentry",
-            "description": "Query Sentry errors and issues.",
-            "command": [
-                "uv",
-                "run",
-                "mcp-server-sentry"
-            ],
-            "inputSchema": {}
-        },
-        {
-            "name": "memory",
-            "description": "Persistent knowledge graph memory for the agent.",
-            "command": [
-                "uv",
-                "run",
-                "mcp-server-memory"
-            ],
-            "inputSchema": {}
-        },
-        {
-            "name": "puppeteer",
-            "description": "Browser automation and scraping.",
-            "command": [
-                "uv",
-                "run",
-                "mcp-server-puppeteer"
-            ],
-            "inputSchema": {}
-        }
-    ]
+  "tools": [
+    {
+      "name": "Actors MCP Server",
+      "url": "https://apify.com/apify/actors-mcp-server",
+      "description": "Use 3,000+ pre-built cloud tools to extract data from websites, e-commerce, social media, search engines, maps, and more",
+      "command": [],
+      "inputSchema": {}
+    },
+    {
+      "name": "aws",
+      "description": "AWS integration for managing cloud resources.",
+      "command": [
+        "npx",
+        "-y",
+        "mcp-server-aws"
+      ],
+      "inputSchema": {}
+    },
+    {
+      "name": "brave_search",
+      "description": "Privacy-focused web search using Brave API.",
+      "command": [
+        "uv",
+        "run",
+        "mcp-server-brave-search"
+      ],
+      "inputSchema": {}
+    },
+    {
+      "name": "everything",
+      "description": "Search for files and content dynamically.",
+      "command": [
+        "npx",
+        "-y",
+        "@modelcontextprotocol/server-everything"
+      ],
+      "inputSchema": {}
+    },
+    {
+      "name": "fetch",
+      "description": "Retrieve raw content from any URL.",
+      "command": [
+        "uv",
+        "run",
+        "mcp-server-fetch"
+      ],
+      "inputSchema": {}
+    },
+    {
+      "name": "filesystem",
+      "description": "Read and write files on the local filesystem.",
+      "command": [
+        "uv",
+        "run",
+        "mcp-server-filesystem",
+        "${TARGET_PATH}"
+      ],
+      "inputSchema": {}
+    },
+    {
+      "name": "git_read",
+      "description": "Read and search git repositories.",
+      "command": [
+        "uv",
+        "run",
+        "mcp-server-git",
+        "--repository",
+        "${REPO_PATH}"
+      ],
+      "inputSchema": {}
+    },
+    {
+      "name": "github_pr",
+      "description": "Interact with GitHub Issues and Pull Requests.",
+      "command": [
+        "uv",
+        "run",
+        "mcp-server-github"
+      ],
+      "inputSchema": {}
+    },
+    {
+      "name": "gitlab",
+      "description": "GitLab integration for issues and MRs.",
+      "command": [
+        "npx",
+        "-y",
+        "@sekora/gitlab-mcp"
+      ],
+      "inputSchema": {}
+    },
+    {
+      "name": "google_maps",
+      "description": "Search places and get directions via Google Maps.",
+      "command": [
+        "uv",
+        "run",
+        "mcp-server-google-maps"
+      ],
+      "inputSchema": {}
+    },
+    {
+      "name": "memory",
+      "description": "Persistent knowledge graph memory for the agent.",
+      "command": [
+        "uv",
+        "run",
+        "mcp-server-memory"
+      ],
+      "inputSchema": {}
+    },
+    {
+      "name": "playwright",
+      "description": "Browser automation using Microsoft Playwright.",
+      "command": [
+        "npx",
+        "-y",
+        "@automatalabs/mcp-server-playwright"
+      ],
+      "inputSchema": {}
+    },
+    {
+      "name": "postgres",
+      "description": "Access PostgreSQL databases.",
+      "command": [
+        "uv",
+        "run",
+        "mcp-server-postgres",
+        "${POSTGRES_URL}"
+      ],
+      "inputSchema": {}
+    },
+    {
+      "name": "puppeteer",
+      "description": "Browser automation and scraping.",
+      "command": [
+        "uv",
+        "run",
+        "mcp-server-puppeteer"
+      ],
+      "inputSchema": {}
+    },
+    {
+      "name": "sentry",
+      "description": "Query Sentry errors and issues.",
+      "command": [
+        "uv",
+        "run",
+        "mcp-server-sentry"
+      ],
+      "inputSchema": {}
+    },
+    {
+      "name": "sequential_thinking",
+      "description": "A tool for structured, step-by-step thinking and problem solving.",
+      "command": [
+        "npx",
+        "-y",
+        "@modelcontextprotocol/server-sequential-thinking"
+      ],
+      "inputSchema": {}
+    },
+    {
+      "name": "slack",
+      "description": "Interact with Slack workspaces.",
+      "command": [
+        "uv",
+        "run",
+        "mcp-server-slack"
+      ],
+      "inputSchema": {}
+    },
+    {
+      "name": "sqlite_query",
+      "description": "Execute read-only SQL queries on a local database.",
+      "command": [
+        "uv",
+        "run",
+        "mcp-server-sqlite",
+        "--db-path",
+        "${DB_PATH}"
+      ],
+      "inputSchema": {}
+    },
+    {
+      "name": "time",
+      "description": "Get current time and timezone info.",
+      "command": [
+        "uv",
+        "run",
+        "mcp-server-time"
+      ],
+      "inputSchema": {}
+    },
+    {
+      "name": "weather",
+      "description": "Get current weather using OpenWeatherMap or other providers.",
+      "command": [
+        "npx",
+        "-y",
+        "mcp-server-weather"
+      ],
+      "inputSchema": {}
+    }
+  ]
 }
