@@ -13,29 +13,48 @@ def fetch_content(url):
         print(f"Error fetching {url}: {e}")
         return None
 
-def parse_markdown_list(content):
+def parse_markdown_list(content, url):
     servers = []
     # Regex for "- [Name](URL) - Description" or similar
     # Captures: Name, URL, Description
     pattern = r'-\s+\[(.*?)\]\((.*?)\)\s*[-:]\s*(.*)'
     
+    # Debug: Print first 10 lines
+    print(f"--- START CONTENT PREVIEW {url} ---")
+    for i, line in enumerate(content.splitlines()[:15]):
+        print(f"{i}: {line}")
+    print("--- END CONTENT PREVIEW ---")
+
     for line in content.splitlines():
-        match = re.search(pattern, line)
+        # Robust Regex: 
+        # Find [Name](URL) followed closely by " - " or " : "
+        # This handles "- **[Name](URL)** - Desc" and other variations.
+        
+        match = re.search(r'\[(.*?)\]\((.*?)\).{0,5}[-:]\s*(.*)', line)
+        
         if match:
+            # Check if it looks like a server entry (has a description, not just a navigation link)
             name = match.group(1).strip()
-            url = match.group(2).strip()
+            url_match = match.group(2).strip()
             description = match.group(3).strip()
             
-            # Simple heuristic to identify "servers" vs other links
-            if "mcp" in name.lower() or "server" in name.lower() or "mcp" in description.lower() or "server" in url.lower():
+            if not description:
+                continue
+
+            # Cleanup name if it's bolded inside the brackets (unlikely for proper markdown, but possible)
+            # Usually **[Name]** means the boolean is outside.
+            # If the regex matched `[**Name**](...)`, we'd see `**Name**`.
+            if name.startswith("**") and name.endswith("**"):
+                name = name[2:-2]
+
+            # Filtering heuristics
+            if "mcp" in name.lower() or "server" in name.lower() or "mcp" in description.lower() or "server" in url_match.lower():
                  servers.append({
                     "name": name,
-                    "url": url,
+                    "url": url_match,
                     "description": description,
-                    # We don't know the exact command, but we can provide a hint or leave it empty.
-                    # The Agent will rely on the description to pick it.
                     "command": [], 
-                    "inputSchema": {} # Discovery only
+                    "inputSchema": {} 
                 })
     return servers
 
@@ -66,7 +85,7 @@ def main():
         print(f"Fetching {url}...")
         content = fetch_content(url)
         if content:
-            found = parse_markdown_list(content)
+            found = parse_markdown_list(content, url)
             print(f"Found {len(found)} servers in {url}")
             for server in found:
                 # Deduplicate: Only add if not already present (manual entries take precedence)
