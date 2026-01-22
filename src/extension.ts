@@ -26,34 +26,46 @@ export async function activate(context: vscode.ExtensionContext) {
          }
     }));
 
-    // Command to show status (Launch Inspector)
+    // Command to show status (Show Dashboard/Logs)
     context.subscriptions.push(vscode.commands.registerCommand('mcp-manager.showStatus', async () => {
-        try {
-            const uvPath = await UvManager.ensureUV(context);
-            const routerPath = context.asAbsolutePath(path.join('python', 'router.py'));
-            
-            // Create or reuse terminal
-            const terminalName = 'MCP Inspector';
-            let terminal = vscode.window.terminals.find(t => t.name === terminalName);
-            if (!terminal) {
-                terminal = vscode.window.createTerminal(terminalName);
-            }
-            
-            terminal.show();
-            terminal.sendText(`echo "Launching MCP Inspector..."`);
-            // Use npx to run the inspector, pointing it to our router
-            // We use -y to skip confirmation
-            terminal.sendText(`npx -y @modelcontextprotocol/inspector "${uvPath}" run "${routerPath}"`);
-            
-            vscode.window.showInformationMessage('MCP Inspector launched in terminal. Open the link (usually http://localhost:5173) in your browser.');
-        } catch (e) {
-            vscode.window.showErrorMessage(`Failed to launch Inspector: ${e}`);
-        }
+        await vscode.commands.executeCommand('mcp-manager.openDashboard');
     }));
 
     // Command to Add Tool
     context.subscriptions.push(vscode.commands.registerCommand('mcp-manager.addTool', async () => {
         await ToolManager.addTool(context);
+    }));
+
+    // Command to Open Dashboard
+    context.subscriptions.push(vscode.commands.registerCommand('mcp-manager.openDashboard', async () => {
+        const panel = vscode.window.createWebviewPanel(
+            'mcpDashboard',
+            'MCP Manager Dashboard',
+            vscode.ViewColumn.One,
+            {
+                enableScripts: true,
+                localResourceRoots: [context.extensionUri]
+            }
+        );
+
+        const logPath = path.join(context.extensionPath, 'logs', 'usage.jsonl');
+        // Use the router's actual manifest, not the entire community registry
+        const manifestPath = path.join(context.extensionPath, 'router_manifest.json');
+        
+        const updateWebview = async () => {
+            try {
+                panel.webview.html = await DashboardGenerator.getHtml(context.extensionUri, logPath, manifestPath);
+            } catch (e) {
+                panel.webview.html = `<h1>Dashboard Error</h1><p>${e}</p>`;
+            }
+        };
+
+        // Initial update
+        await updateWebview();
+
+        // Refresh on file changes? 
+        const interval = setInterval(updateWebview, 5000);
+        panel.onDidDispose(() => clearInterval(interval));
     }));
 
     // 1. Ensure uv is available

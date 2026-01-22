@@ -31,6 +31,10 @@
       {
         "command": "mcp-manager.addTool",
         "title": "MCP: Add Tool"
+      },
+      {
+        "command": "mcp-manager.openDashboard",
+        "title": "MCP: Open Manager Dashboard"
       }
     ],
     "configuration": {

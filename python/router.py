@@ -55,6 +55,7 @@ def load_manifest() -> Dict:
     manifest = {"tools": []}
     
     # 1. Load User Manifest (Priority)
+    # Only return tools explicitly configured/installed by the user
     if os.path.exists(MANIFEST_PATH):
         try:
             with open(MANIFEST_PATH, "r") as f:
@@ -62,21 +63,19 @@ def load_manifest() -> Dict:
                 manifest["tools"].extend(user_manifest.get("tools", []))
         except Exception as e:
             sys.stderr.write(f"Error loading user manifest: {e}\n")
+            
+    return manifest
 
-    # 2. Load Community Registry (Auto-Discovery)
+def get_community_tool(name: str) -> Optional[Dict]:
+    """Helper to find a tool in the community registry without loading all of them."""
     if os.path.exists(COMMUNITY_PATH):
         try:
             with open(COMMUNITY_PATH, "r") as f:
-                community_manifest = json.load(f)
-                # Only add if not already present by name
-                existing_names = set(t["name"] for t in manifest["tools"])
-                for tool in community_manifest.get("tools", []):
-                    if tool["name"] not in existing_names:
-                        manifest["tools"].append(tool)
+                community = json.load(f)
+                return next((t for t in community.get("tools", []) if t["name"] == name), None)
         except Exception as e:
-            sys.stderr.write(f"Error loading community registry: {e}\n")
-            
-    return manifest
+            sys.stderr.write(f"Error reading community registry: {e}\n")
+    return None
 
 def expand_vars(text: str) -> str:
     """Expand environment variables in format ${VAR} or $VAR"""
@@ -114,6 +113,19 @@ async def list_tools() -> List[types.Tool]:
                 "query": {"type": "string", "description": "Search query for the missing capability (e.g. 'weather', 'database', 'browser')"}
             },
             "required": ["query"]
+        }
+    ))
+
+    tools.append(types.Tool(
+        name="log_activity",
+        description="Log a platform-native activity (e.g. web search, file system action) that bypasses MCP for accountability in the dashboard.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "activity": {"type": "string", "description": "Short name of the activity (e.g. 'Web Search')"},
+                "details": {"type": "string", "description": "Summary or details of what was done (e.g. result of search)"}
+            },
+            "required": ["activity", "details"]
         }
     ))
 
@@ -199,16 +211,40 @@ async def call_tool(name: str, arguments: dict) -> List[types.TextContent | type
         except Exception as e:
             return [types.TextContent(type="text", text=f"Error searching registry: {e}")]
 
+    if name == "log_activity":
+        try:
+            activity = arguments["activity"]
+            details = arguments["details"]
+            
+            log_entry = {
+                "timestamp": time.time(),
+                "iso_time": time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime()),
+                "tool": f"native:{activity}",
+                "success": True,
+                "duration": 0,
+                "details": details
+            }
+            with open(LOG_FILE, "a", encoding="utf-8") as f:
+                f.write(json.dumps(log_entry) + "\n")
+                
+            return [types.TextContent(type="text", text=f"Successfully logged activity: {activity}")]
+        except Exception as e:
+            return [types.TextContent(type="text", text=f"Error logging activity: {e}")]
+
 
     manifest = load_manifest()
     tool_def = next((t for t in manifest.get("tools", []) if t["name"] == name), None)
+    
+    # Lazy Load: If not in manifest, check community registry
+    if not tool_def:
+        tool_def = get_community_tool(name)
     
     start_time = time.time()
     success = False
     error_msg = None
 
     if not tool_def:
-        return [types.TextContent(type="text", text=f"Tool {name} not found")]
+        return [types.TextContent(type="text", text=f"Tool {name} not found in user manifest or community registry.")]
 
     command = tool_def["command"]
     

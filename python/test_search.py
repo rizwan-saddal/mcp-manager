@@ -17,7 +17,7 @@ except ImportError:
     sys.exit(1)
 
 def test_search():
-    print("Testing search_mcp_servers with query 'linear'...")
+    print("Testing search_mcp_servers with query 'weather'...")
     # router.search_mcp_servers expects a dict with 'query' key
     # Wait, looking at the code, does it take 'query' argument directly or 'arguments' dict?
     # I need to check the definition signature in router.py.
@@ -52,7 +52,7 @@ if __name__ == "__main__":
             tools = data.get("tools", [])
             print(f"Total tools: {len(tools)}")
             
-            linear_tools = [t for t in tools if "linear" in t["name"].lower()]
-            print(f"Found {len(linear_tools)} tools matching 'linear':")
+            linear_tools = [t for t in tools if "weather" in t["name"].lower()]
+            print(f"Found {len(linear_tools)} tools matching 'weather':")
             for t in linear_tools:
                 print(f"- {t['name']}: {t['description'][:50]}...")
