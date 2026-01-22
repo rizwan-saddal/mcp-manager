@@ -90,18 +90,18 @@ async def list_tools() -> List[types.Tool]:
     # Add Router Internal Tools
     tools.append(types.Tool(
         name="configure_mcp_tool",
-        description="Configure environment variables for an MCP tool. Use this to save API keys (e.g. BRAVE_API_KEY).",
+        description="Install or Configure an MCP tool. Use this to permanently add a tool from the registry to the manifest, or to save environment variables (like API keys).",
         inputSchema={
             "type": "object",
             "properties": {
-                "name": {"type": "string", "description": "Name of the tool (e.g. brave_search)"},
+                "name": {"type": "string", "description": "Name of the tool to install/configure (e.g. 'weather', 'brave_search')"},
                 "env": {
                     "type": "object", 
                     "additionalProperties": {"type": "string"},
-                    "description": "Key-value pairs of environment variables to set"
+                    "description": "Optional: Key-value pairs of environment variables. Leave empty if just installing."
                 }
             },
-            "required": ["name", "env"]
+            "required": ["name"]
         }
     ))
     
@@ -135,7 +135,7 @@ async def call_tool(name: str, arguments: dict) -> List[types.TextContent | type
     if name == "configure_mcp_tool":
         try:
             tool_name = arguments["name"]
-            new_env = arguments["env"]
+            new_env = arguments.get("env", {})
             
             # 1. Load User Manifest (or create empty)
             user_manifest = {"tools": []}
@@ -191,7 +191,8 @@ async def call_tool(name: str, arguments: dict) -> List[types.TextContent | type
                             results.append({
                                 "name": tool["name"],
                                 "description": tool.get("description", ""),
-                                "command_preview": " ".join(tool["command"])
+                                "command_preview": " ".join(tool["command"]),
+                                "inputSchema": tool.get("inputSchema", {})
                             })
             
             return [types.TextContent(type="text", text=json.dumps(results, indent=2))]

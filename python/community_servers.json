@@ -31,6 +31,67 @@
             "inputSchema": {}
         },
         {
+            "name": "aws",
+            "description": "AWS integration for managing cloud resources.",
+            "command": [
+                "npx",
+                "-y",
+                "mcp-server-aws"
+            ],
+            "inputSchema": {}
+        },
+        {
+            "name": "gitlab",
+            "description": "GitLab integration for issues and MRs.",
+            "command": [
+                "npx",
+                "-y",
+                "@sekora/gitlab-mcp"
+            ],
+            "inputSchema": {}
+        },
+        {
+            "name": "time",
+            "description": "Get current time and timezone info.",
+            "command": [
+                "uv",
+                "run",
+                "mcp-server-time"
+            ],
+            "inputSchema": {}
+        },
+        {
+            "name": "sequential_thinking",
+            "description": "A tool for structured, step-by-step thinking and problem solving.",
+            "command": [
+                "npx",
+                "-y",
+                "@modelcontextprotocol/server-sequential-thinking"
+            ],
+            "inputSchema": {}
+        },
+        {
+            "name": "everything",
+            "description": "Search for files and content dynamically.",
+            "command": [
+                "npx",
+                "-y",
+                "@modelcontextprotocol/server-everything"
+            ],
+            "inputSchema": {}
+        },
+        {
+            "name": "filesystem",
+            "description": "Read and write files on the local filesystem.",
+            "command": [
+                "npx",
+                "-y",
+                "@modelcontextprotocol/server-filesystem",
+                "${TARGET_PATH}"
+            ],
+            "inputSchema": {}
+        },
+        {
             "name": "fetch",
             "description": "Retrieve raw content from any URL.",
             "command": [

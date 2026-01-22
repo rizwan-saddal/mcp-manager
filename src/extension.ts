@@ -26,22 +26,28 @@ export async function activate(context: vscode.ExtensionContext) {
          }
     }));
 
-    // Command to show status
+    // Command to show status (Launch Inspector)
     context.subscriptions.push(vscode.commands.registerCommand('mcp-manager.showStatus', async () => {
-        const panel = vscode.window.createWebviewPanel(
-            'mcpDashboard',
-            'MCP Manager Dashboard',
-            vscode.ViewColumn.One,
-            { enableScripts: true }
-        );
-
-        const manifestPath = path.join(context.extensionPath, 'router_manifest.json');
-        const logPath = path.join(context.extensionPath, 'logs', 'usage.jsonl');
-        
         try {
-            panel.webview.html = await DashboardGenerator.getHtml(context.extensionUri, logPath, manifestPath);
+            const uvPath = await UvManager.ensureUV(context);
+            const routerPath = context.asAbsolutePath(path.join('python', 'router.py'));
+            
+            // Create or reuse terminal
+            const terminalName = 'MCP Inspector';
+            let terminal = vscode.window.terminals.find(t => t.name === terminalName);
+            if (!terminal) {
+                terminal = vscode.window.createTerminal(terminalName);
+            }
+            
+            terminal.show();
+            terminal.sendText(`echo "Launching MCP Inspector..."`);
+            // Use npx to run the inspector, pointing it to our router
+            // We use -y to skip confirmation
+            terminal.sendText(`npx -y @modelcontextprotocol/inspector "${uvPath}" run "${routerPath}"`);
+            
+            vscode.window.showInformationMessage('MCP Inspector launched in terminal. Open the link (usually http://localhost:5173) in your browser.');
         } catch (e) {
-            vscode.window.showErrorMessage(`Failed to load dashboard: ${e}`);
+            vscode.window.showErrorMessage(`Failed to launch Inspector: ${e}`);
         }
     }));
 
